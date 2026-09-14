@@ -23,8 +23,8 @@ This is the paper your research gap comes from.
 
 ## 2. Research Papers
 
-| # | Paper | Link | Status |
-|---|---|---|---|
+| # | Paper | Link |
+|---|---|---|
 | 1 | Meng, W., Zhang, X., Zhou, L., Guo, H., & Hu, X. (2025). Advances in UAV Path Planning: A Comprehensive Review. *Drones, 9*(5), 376. | https://doi.org/10.3390/drones9050376 |
 | 2 | Hart, P. E., Nilsson, N. J., & Raphael, B. (1968). A Formal Basis for the Heuristic Determination of Minimum Cost Paths. *IEEE Trans. SSC, 4*(2), 100–107. | https://doi.org/10.1109/TSSC.1968.300136 |
 | 3 | Elfes, A. (1989). Using Occupancy Grids for Mobile Robot Perception and Navigation. *Computer, 22*(6), 46–57. | https://doi.org/10.1109/2.30720 |
@@ -39,8 +39,8 @@ This is the paper your research gap comes from.
 
 ## 3. Books
 
-| Book | Used for | Status |
-|---|---|---|
+| Book | Used for |
+|---|---|
 | Cormen, T. H., Leiserson, C. E., Rivest, R. L., & Stein, C. (2022). *Introduction to Algorithms* (4th ed.). MIT Press. | Heap chapter; the proof that BUILD-HEAP costs O(n), not O(n log n) | 
 | NIET DSA-II course material, Unit 1 (Trees) and Unit 2 (Graphs) | All base definitions |
 
