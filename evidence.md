@@ -60,8 +60,8 @@ Go to the **Implementation Notes → Set representation** section. It lists the 
 This is direct, citable support that OPEN-list choice is a recognised design decision — which is precisely why the base paper leaving it unstated is a real gap. **Cite this one.**
 ### Others
 
-| Resource | Link | Used for | Status |
-|---|---|---|---|
+| Resource | Link | Used for |
+|---|---|---|
 | Red Blob Games — Introduction to A* | https://www.redblobgames.com/pathfinding/a-star/introduction.html | Interactive grid diagrams; understanding how A* expands across a grid |
 | Red Blob Games — Heuristics (see index above) | https://theory.stanford.edu/~amitp/GameProgramming/index.html | Manhattan / diagonal / Euclidean heuristics, tie-breaking |
 | MovingAI 2D Pathfinding Benchmarks | Referenced in Sturtevant (2012), paper #4 | Standard grid maps with known optimal path costs, for Review 2 testing |
@@ -71,9 +71,9 @@ This is direct, citable support that OPEN-list choice is a recognised design dec
 
 ## 5. Video Lectures
 
-| Channel | Link | Claimed use in report | Status |
-|---|---|---|---|
-| Abdul Bari — channel | https://www.youtube.com/@abdul_bari | A* and Dijkstra |
+| Channel | Link | Claimed use in report |
+|---|---|---|
+| CodewithHarry | https://www.youtube.com/@CodeWithHarry | C and CPP |
 | Abdul Bari — all playlists | https://www.youtube.com/@abdul_bari/playlists | Algorithms playlist (84 videos) covers BFS, DFS, shortest paths, greedy, DP, backtracking |
 | Abdul Bari — DSA Full Course | https://www.youtube.com/playlist?list=PLsr8vTgyLdy_YndxNcI4WkH5Vorj5qvrv | Trees, AVL, heaps |
 | Jenny's Lectures | — | AVL rotations |
