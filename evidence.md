@@ -75,8 +75,7 @@ This is direct, citable support that OPEN-list choice is a recognised design dec
 |---|---|---|
 | CodewithHarry | https://www.youtube.com/@CodeWithHarry | C and CPP |
 | Abdul Bari — all playlists | https://www.youtube.com/@abdul_bari/playlists | Algorithms playlist (84 videos) covers BFS, DFS, shortest paths, greedy, DP, backtracking |
-| Abdul Bari — DSA Full Course | https://www.youtube.com/playlist?list=PLsr8vTgyLdy_YndxNcI4WkH5Vorj5qvrv | Trees, AVL, heaps |
-| Jenny's Lectures | — | AVL rotations |
+| Take u Forward — DSA Full Course | https://takeuforward.org/ | Trees, AVL, heaps |
 
 ---
 
