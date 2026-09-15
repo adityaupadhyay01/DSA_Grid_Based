@@ -16,7 +16,6 @@ This is where the research gap comes from.
 | **Citation** | Gao, W., Li, L., & Pang, D. (2026). Urban low-altitude UAV path planning by fusing an enhanced A* algorithm with an adaptive artificial potential field method. *Scientific Reports, 16*, Article 18275. |
 | **Link** | https://doi.org/10.1038/s41598-026-45160-6 |
 | **Direct PDF** | https://www.nature.com/articles/s41598-026-45160-6.pdf |
-| **Access** | Open Access, free, no login |
 | **Used for** | The gap: the paper reports every result as computation time but never says what structure holds its OPEN list. |
 
 **Read at minimum:** the Abstract, the Introduction, and the subsection headed "A* Algorithm". That subsection is where the OPEN list is described in words only. That is the evidence for the gap.
