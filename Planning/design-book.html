@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+@page{size:A4;margin:16mm 14mm}
+@media print{
+  figure,.algo,.term,.tablewrap,.note{break-inside:avoid}
+  h2.sec{break-after:avoid}
+  .toc{break-after:page}
+  body{font-size:11.5pt}
+}
+</style>
+<title>Drone Planner Design Book</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Plain document: white ground, black text, one measured column. */
+:root{
+  --bg:#FFFFFF; --ink:#000000; --muted:#555555; --line:#CCCCCC; --sunk:#F5F5F5;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:Georgia,"Times New Roman",serif; font-size:16px; line-height:1.55;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:780px; margin:0 auto; padding-inline:20px; padding-block:36px 64px}
+
+.masthead{border-bottom:1px solid var(--ink); padding-bottom:16px; margin-bottom:24px}
+.eyebrow{font-family:ui-monospace,Consolas,monospace; font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+h1{font-size:28px; font-weight:700; line-height:1.15; margin:0 0 10px; text-wrap:balance}
+.standfirst{font-size:15.5px; color:var(--muted); margin:0; max-width:62ch; font-style:italic}
+.meta{display:flex; flex-wrap:wrap; gap:3px 20px; margin-top:14px; font-size:13px; color:var(--muted)}
+.meta b{color:var(--ink); font-weight:600}
+
+.toc{border:1px solid var(--line); padding:14px 18px; margin-bottom:32px}
+.toc h2{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+  margin:0 0 8px; font-weight:600; font-family:ui-monospace,Consolas,monospace}
+.toc ol{margin:0; padding-left:20px; columns:2; column-gap:26px; font-size:14px}
+.toc li{margin-bottom:3px; break-inside:avoid}
+.toc a{color:var(--ink)}
+@media (max-width:560px){.toc ol{columns:1}}
+
+section{margin-bottom:40px; scroll-margin-top:12px}
+h2.sec{font-size:21px; font-weight:700; margin:0 0 8px; padding-top:14px;
+  border-top:1px solid var(--line); text-wrap:balance}
+h2.sec .num{font-family:ui-monospace,Consolas,monospace; font-size:12px; font-weight:400;
+  color:var(--muted); display:block; margin-bottom:3px; letter-spacing:.08em}
+h3{font-size:17px; margin:24px 0 6px}
+p{margin:0 0 12px; max-width:66ch}
+ul,ol.body{margin:0 0 12px; padding-left:22px; max-width:66ch}
+li{margin-bottom:4px}
+code{font-family:ui-monospace,Consolas,monospace; font-size:.86em; background:var(--sunk);
+  padding:1px 4px; border:1px solid var(--line)}
+a{color:var(--ink)}
+
+figure{margin:22px 0; border:1px solid var(--line); padding:18px 16px 12px; overflow-x:auto}
+figure svg{display:block; width:100%; max-width:100%; height:auto; color:#000}
+figcaption{margin-top:12px; padding-top:9px; border-top:1px solid var(--line);
+  font-size:13px; color:var(--muted); line-height:1.45}
+figcaption b{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink);
+  font-weight:700; display:block; margin-bottom:3px; font-family:ui-monospace,Consolas,monospace}
+
+.algo{border:1px solid var(--line); margin:20px 0; overflow:hidden}
+.algo header{display:flex; flex-wrap:wrap; gap:3px 12px; align-items:baseline;
+  padding:8px 14px; background:var(--sunk); border-bottom:1px solid var(--line)}
+.algo header .name{font-family:ui-monospace,Consolas,monospace; font-weight:700; font-size:12.5px}
+.algo header .cx{font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--muted); margin-left:auto}
+.algo pre{margin:0; padding:12px 14px; overflow-x:auto;
+  font-family:ui-monospace,Consolas,monospace; font-size:12px; line-height:1.6; tab-size:2}
+.algo pre .kw{font-weight:700}
+.algo pre .cm{color:var(--muted); font-style:italic}
+.algo pre .hl{font-weight:700; text-decoration:underline}
+
+.term{border:1px solid var(--line); margin:20px 0; overflow:hidden}
+.term .bar{display:flex; align-items:center; gap:6px; padding:6px 12px;
+  background:var(--sunk); border-bottom:1px solid var(--line)}
+.term .dot{width:8px; height:8px; border-radius:50%; border:1px solid var(--muted)}
+.term .path{font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--muted); margin-left:4px}
+.term pre{margin:0; padding:12px 14px; overflow-x:auto;
+  font-family:ui-monospace,Consolas,monospace; font-size:11.5px; line-height:1.5}
+
+.tablewrap{overflow-x:auto; margin:20px 0; border:1px solid var(--line)}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{padding:7px 11px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+th{background:var(--sunk); font-family:ui-monospace,Consolas,monospace; font-size:10.5px;
+  font-weight:700; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; white-space:nowrap}
+.yes{font-weight:700}
+.no{color:var(--muted)}
+.pick{font-weight:700; text-decoration:underline}
+
+.note{border:1px solid var(--ink); padding:11px 15px; margin:20px 0; font-size:14px}
+.note p:last-child{margin-bottom:0}
+.note .tag{font-family:ui-monospace,Consolas,monospace; font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; font-weight:700; display:block; margin-bottom:4px}
+
+footer{margin-top:44px; padding-top:14px; border-top:1px solid var(--ink);
+  font-size:12.5px; color:var(--muted)}
+</style>
+</head><body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Design Book · DSA-II CCSE0301 · Review 2</p>
+  <h1>Grid-Based Drone Path Planning Simulation</h1>
+  <p class="standfirst">How the planner is put together: the layers, the algorithms in pseudocode, the flow of control through each one, and the screens it prints. Written so the logic can be followed without opening the source.</p>
+  <div class="meta">
+    <span><b>Aditya Upadhyay</b> · 2501330100038</span>
+    <span>B.Tech CSE-A, Semester III</span>
+    <span>NIET Greater Noida</span>
+    <span>Faculty: <b>Mr. Shamshad Ali</b></span>
+    <span>SDG 9</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#layers">System layers</a></li>
+    <li><a href="#dataflow">Data flow</a></li>
+    <li><a href="#swap">The swap point</a></li>
+    <li><a href="#grid">Map and cost model</a></li>
+    <li><a href="#astar">A* search</a></li>
+    <li><a href="#open">The three OPEN lists</a></li>
+    <li><a href="#knapsack">Waypoint selection</a></li>
+    <li><a href="#tsp">Visiting order</a></li>
+    <li><a href="#screens">Screen wireframes</a></li>
+    <li><a href="#complexity">Complexity summary</a></li>
+    <li><a href="#tests">Test plan</a></li>
+  </ol>
+</nav>
+
+<!-- ===================== 1. LAYERS ===================== -->
+<section id="layers">
+  <h2 class="sec"><span class="num">01</span>System layers</h2>
+  <p>Four layers, each depending only on the one below it. The arrow that matters is the dashed one: A* points at the <code>OpenList</code> interface, never at a concrete structure. That single indirection is what makes the whole comparison valid, because swapping the structure cannot change a line of the search.</p>
+
+  <figure>
+    <svg viewBox="0 0 760 390" role="img" aria-label="Four stacked layers: mission, search, structure and map. A star depends on the OpenList interface, which the three structures implement.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+        <marker id="arS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="#000"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">
+
+        <!-- Mission layer -->
+        <rect x="20" y="18" width="720" height="74" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="32" y="38" font-size="10.5" fill="#000" letter-spacing="1.2">MISSION LAYER — mission.hpp</text>
+        <rect x="36" y="48" width="200" height="30" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="136" y="67" text-anchor="middle">0/1 Knapsack (DP)</text>
+        <rect x="256" y="48" width="200" height="30" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="356" y="67" text-anchor="middle">Branch and Bound</text>
+        <rect x="476" y="48" width="200" height="30" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="576" y="67" text-anchor="middle">Backtracking (control)</text>
+
+        <!-- Search layer -->
+        <rect x="20" y="118" width="720" height="62" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="32" y="138" font-size="10.5" fill="#000" letter-spacing="1.2">SEARCH LAYER — astar.hpp</text>
+        <rect x="36" y="146" width="280" height="26" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="176" y="163" text-anchor="middle">A*  f = g + h</text>
+        <text x="336" y="163" font-size="11" fill="#555">holds no structure of its own</text>
+
+        <!-- Interface seam -->
+        <rect x="20" y="206" width="720" height="34" fill="none" stroke="#000" stroke-width="1.6"/>
+        <text x="380" y="228" text-anchor="middle" fill="#000" font-size="12.5">interface OpenList { insert · extract_min · empty }</text>
+
+        <!-- Structure layer -->
+        <rect x="20" y="266" width="720" height="62" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="32" y="286" font-size="10.5" fill="#000" letter-spacing="1.2">STRUCTURE LAYER — open_list.hpp</text>
+        <rect x="36" y="294" width="212" height="26" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="142" y="311" text-anchor="middle">Unsorted array</text>
+        <rect x="268" y="294" width="212" height="26" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="374" y="311" text-anchor="middle">Binary min-heap</text>
+        <rect x="500" y="294" width="212" height="26" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text x="606" y="311" text-anchor="middle">Bucket (Dial) queue</text>
+
+        <!-- Map layer -->
+        <rect x="20" y="346" width="720" height="30" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="32" y="365" font-size="10.5" fill="#000" letter-spacing="1.2">MAP LAYER — grid.hpp</text>
+        <text x="420" y="365" text-anchor="middle">flat occupancy array · O(1) lookup · octile heuristic</text>
+
+        <!-- arrows -->
+        <line x1="380" y1="92" x2="380" y2="116" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="380" y1="180" x2="380" y2="204" stroke="#000" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arS)"/>
+        <line x1="142" y1="292" x2="142" y2="244" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="374" y1="292" x2="374" y2="244" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="606" y1="292" x2="606" y2="244" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <line x1="176" y1="344" x2="176" y2="330" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+
+        <text x="392" y="196" font-size="10.5" fill="#000">depends on</text>
+        <text x="156" y="260" font-size="10.5" fill="#555">implement</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 1 · Dependency direction</b>
+      A* is compiled against the interface only. The three structures below implement it and are chosen at run time, so the search instructions executed are byte-for-byte identical whichever one is in use. Any difference in measured time therefore belongs to the structure.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 2. DATA FLOW ===================== -->
+<section id="dataflow">
+  <h2 class="sec"><span class="num">02</span>Data flow</h2>
+  <p>One mission, start to finish. A* runs many times before either mission algorithm runs once, which is the part worth noticing: the distance matrix is not input data, it is computed by forty-five separate searches.</p>
+
+  <figure>
+    <svg viewBox="0 0 760 300" role="img" aria-label="Data flow from occupancy grid through forty-five A star runs to a distance matrix, then knapsack selection, then branch and bound ordering, producing a tour.">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">
+
+        <rect x="18" y="30" width="132" height="54" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="84" y="52" text-anchor="middle">Occupancy</text>
+        <text x="84" y="68" text-anchor="middle">grid + obstacles</text>
+
+        <rect x="200" y="30" width="132" height="54" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="266" y="52" text-anchor="middle">10 waypoints</text>
+        <text x="266" y="68" text-anchor="middle">value + cost</text>
+
+        <rect x="382" y="30" width="150" height="54" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <text x="457" y="52" text-anchor="middle">A* × 45</text>
+        <text x="457" y="68" text-anchor="middle" font-size="10.5" fill="#555">every waypoint pair</text>
+
+        <rect x="582" y="30" width="160" height="54" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="662" y="52" text-anchor="middle">Distance matrix</text>
+        <text x="662" y="68" text-anchor="middle" font-size="10.5" fill="#555">10 × 10, symmetric</text>
+
+        <rect x="582" y="124" width="160" height="54" fill="none" stroke="#000" stroke-width="1.6"/>
+        <text x="662" y="146" text-anchor="middle" fill="#000">0/1 Knapsack</text>
+        <text x="662" y="162" text-anchor="middle" font-size="10.5" fill="#000">budget 900 units</text>
+
+        <rect x="382" y="124" width="150" height="54" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="457" y="146" text-anchor="middle">Selected stops</text>
+        <text x="457" y="162" text-anchor="middle" font-size="10.5" fill="#555">W1 W2 W3 W5 W6</text>
+
+        <rect x="200" y="124" width="132" height="54" fill="none" stroke="#000" stroke-width="1.6"/>
+        <text x="266" y="146" text-anchor="middle" fill="#000">Branch &amp;</text>
+        <text x="266" y="162" text-anchor="middle" fill="#000">Bound</text>
+
+        <rect x="18" y="124" width="132" height="54" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="84" y="146" text-anchor="middle">Closed tour</text>
+        <text x="84" y="162" text-anchor="middle" font-size="10.5" fill="#555">cost 154.114</text>
+
+        <rect x="18" y="218" width="724" height="46" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="30" y="238" font-size="10.5" fill="#000" letter-spacing="1.2">VERIFIERS — run alongside, never inside the measured path</text>
+        <text x="30" y="255" font-size="11">exhaustive subset search (checks the knapsack)  ·  plain backtracking (checks the bound)</text>
+
+        <line x1="150" y1="57" x2="198" y2="57" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="332" y1="57" x2="380" y2="57" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="532" y1="57" x2="580" y2="57" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="662" y1="84" x2="662" y2="122" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="580" y1="151" x2="534" y2="151" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="382" y1="151" x2="334" y2="151" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="200" y1="151" x2="152" y2="151" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+
+        <text x="552" y="112" font-size="10.5" fill="#555" text-anchor="end">costs feed the budget</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 2 · One mission end to end</b>
+      Forty-five A* runs build the 10 × 10 matrix. The knapsack reads battery costs from it and returns five stops; branch and bound reads the same matrix and orders them. The two brute-force verifiers run on the same inputs but outside the timed region.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 3. SWAP POINT ===================== -->
+<section id="swap">
+  <h2 class="sec"><span class="num">03</span>The swap point</h2>
+  <p>The whole project exists to answer one question the base paper leaves open, so the mechanism that isolates the variable deserves its own picture.</p>
+
+  <figure>
+    <svg viewBox="0 0 760 230" role="img" aria-label="The same A star body with three different OPEN list structures plugged into the same socket, producing three different times for the same route cost.">
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">
+        <rect x="250" y="20" width="260" height="58" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <text x="380" y="42" text-anchor="middle" font-size="13">A* body — unchanged</text>
+        <text x="380" y="60" text-anchor="middle" font-size="10.5" fill="#555">same source, same -O2 build</text>
+
+        <rect x="300" y="92" width="160" height="26" fill="none" stroke="#000" stroke-width="1.6" stroke-dasharray="5 3"/>
+        <text x="380" y="110" text-anchor="middle" fill="#000" font-size="11">OpenList socket</text>
+
+        <rect x="26" y="150" width="212" height="56" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="132" y="170" text-anchor="middle">Unsorted array</text>
+        <text x="132" y="188" text-anchor="middle" font-size="10.5" fill="#555">O(n) pop  ·  3.421 ms</text>
+
+        <rect x="274" y="150" width="212" height="56" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="380" y="170" text-anchor="middle">Binary min-heap</text>
+        <text x="380" y="188" text-anchor="middle" font-size="10.5" fill="#555">O(log n) pop  ·  0.244 ms</text>
+
+        <rect x="522" y="150" width="212" height="56" fill="none" stroke="#000" stroke-width="1.6"/>
+        <text x="628" y="170" text-anchor="middle" fill="#000">Bucket (Dial) queue</text>
+        <text x="628" y="188" text-anchor="middle" font-size="10.5" fill="#000">O(1) pop  ·  0.144 ms</text>
+
+        <line x1="380" y1="78" x2="380" y2="90" stroke="#000" stroke-width="1.6"/>
+        <line x1="132" y1="148" x2="132" y2="130" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="628" y1="148" x2="628" y2="130" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="132" y1="130" x2="628" y2="130" stroke="currentColor" stroke-width="1.2"/>
+        <line x1="380" y1="130" x2="380" y2="120" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar3)"/>
+        <text x="392" y="144" font-size="10.5" fill="#555">exactly one is plugged in per run</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 3 · What is held fixed and what varies</b>
+      Times are medians at 128 × 128 with 20% obstacle density. All three return the same route cost on all fifty test maps, so the spread is purely the cost of choosing the minimum.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 4. GRID ===================== -->
+<section id="grid">
+  <h2 class="sec"><span class="num">04</span>Map and cost model</h2>
+  <p>The map is one flat <code>vector&lt;bool&gt;</code> of <code>W × H</code> cells. A cell is addressed by <code>id = y·W + x</code>, so a lookup is two integer operations and no pointer chasing. About 100,000 lookups happen per plan, which is the reason the map itself uses no tree.</p>
+
+  <p>Costs are scaled to integers so that comparisons are exact and the bucket queue becomes legal in the first place:</p>
+  <ul>
+    <li>straight step = <code>1000</code></li>
+    <li>diagonal step = <code>1414</code> &nbsp;(√2 × 1000, truncated)</li>
+  </ul>
+
+  <div class="algo">
+    <header><span class="name">OCTILE-HEURISTIC(a, b)</span><span class="cx">O(1) · admissible and consistent</span></header>
+<pre><span class="cm">// Straight-line distance is admissible but loose on an 8-neighbour grid.
+// Octile is the exact cost of crossing open ground, so it never overestimates
+// and never underestimates by more than the obstacles force.</span>
+dx <span class="kw">←</span> |x(a) − x(b)|
+dy <span class="kw">←</span> |y(a) − y(b)|
+lo <span class="kw">←</span> min(dx, dy)
+hi <span class="kw">←</span> max(dx, dy)
+<span class="kw">return</span> 1414·lo + 1000·(hi − lo)
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="tag">Why it must be consistent</span>
+    <p>A consistent heuristic guarantees that a cell's <code>f</code> value never decreases along a path. The bucket queue relies on that property for its window size, and lazy deletion in A* relies on it for correctness. An inadmissible heuristic would break both at once.</p>
+  </div>
+</section>
+
+<!-- ===================== 5. A* ===================== -->
+<section id="astar">
+  <h2 class="sec"><span class="num">05</span>A* search</h2>
+
+  <div class="algo">
+    <header><span class="name">ASTAR(grid, start, goal, OPEN)</span><span class="cx">O(E) pops · structure decides the constant</span></header>
+<pre>g[·] <span class="kw">←</span> ∞ ;  parent[·] <span class="kw">←</span> −1 ;  closed[·] <span class="kw">←</span> false
+g[start] <span class="kw">←</span> 0
+OPEN.insert(start, h(start, goal))
+
+<span class="kw">while not</span> OPEN.empty() <span class="kw">do</span>
+    u <span class="kw">←</span> OPEN.extract_min()
+    <span class="hl">if closed[u] then continue</span>          <span class="cm">// lazy deletion</span>
+    closed[u] <span class="kw">←</span> true
+    <span class="kw">if</span> u = goal <span class="kw">then return</span> RECOVER(parent, goal)
+
+    <span class="kw">for each</span> v <span class="kw">in</span> NEIGHBOURS(u) <span class="kw">do</span>        <span class="cm">// up to 8</span>
+        <span class="kw">if</span> blocked(v) <span class="kw">or</span> closed[v] <span class="kw">then continue</span>
+        c  <span class="kw">←</span> diagonal(u,v) ? 1414 : 1000
+        ng <span class="kw">←</span> g[u] + c
+        <span class="kw">if</span> ng &lt; g[v] <span class="kw">then</span>
+            g[v] <span class="kw">←</span> ng
+            parent[v] <span class="kw">←</span> u
+            OPEN.insert(v, ng + h(v, goal))
+
+<span class="kw">return</span> NO-PATH
+</pre>
+  </div>
+
+  <p>There is no decrease-key operation. A better <code>g</code> simply inserts the cell again, and the stale copy is skipped when it surfaces because <code>closed[u]</code> is already set. This is sound only because the heuristic is consistent, and it is what lets all three structures share one minimal interface.</p>
+
+  <figure>
+    <svg viewBox="0 0 700 520" role="img" aria-label="Flowchart of the A star main loop, from pushing the start cell through extract-min, the goal test, the lazy deletion skip, and neighbour relaxation.">
+      <defs>
+        <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" stroke-linejoin="round">
+
+        <rect x="250" y="14" width="200" height="32" rx="16" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="34" text-anchor="middle">insert start into OPEN</text>
+
+        <polygon points="350,64 470,98 350,132 230,98" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="102" text-anchor="middle">OPEN empty?</text>
+
+        <rect x="520" y="82" width="160" height="32" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="600" y="102" text-anchor="middle">return NO-PATH</text>
+
+        <rect x="250" y="150" width="200" height="32" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="170" text-anchor="middle">u ← extract_min()</text>
+
+        <polygon points="350,200 460,230 350,260 240,230" fill="none" stroke="#000" stroke-width="1.4"/>
+        <text x="350" y="234" text-anchor="middle" fill="#000">closed[u]?</text>
+
+        <polygon points="350,286 460,316 350,346 240,316" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="320" text-anchor="middle">u = goal?</text>
+
+        <rect x="520" y="300" width="160" height="32" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="600" y="320" text-anchor="middle">walk parent[] back</text>
+
+        <rect x="230" y="372" width="240" height="32" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="392" text-anchor="middle">closed[u] ← true</text>
+
+        <rect x="200" y="424" width="300" height="48" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="443" text-anchor="middle">for each free neighbour v:</text>
+        <text x="350" y="461" text-anchor="middle" font-size="11">if g[u]+c &lt; g[v] → relax, insert v</text>
+
+        <!-- edges -->
+        <line x1="350" y1="46" x2="350" y2="62" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <line x1="470" y1="98" x2="518" y2="98" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="482" y="92" font-size="10.5" fill="#555">yes</text>
+        <line x1="350" y1="132" x2="350" y2="148" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="358" y="145" font-size="10.5" fill="#555">no</text>
+        <line x1="350" y1="182" x2="350" y2="198" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <line x1="350" y1="260" x2="350" y2="284" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="358" y="278" font-size="10.5" fill="#555">no</text>
+        <line x1="460" y1="316" x2="518" y2="316" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="482" y="310" font-size="10.5" fill="#555">yes</text>
+        <line x1="350" y1="346" x2="350" y2="370" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="358" y="364" font-size="10.5" fill="#555">no</text>
+        <line x1="350" y1="404" x2="350" y2="422" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+
+        <!-- loop back from relax to the empty test -->
+        <polyline points="200,448 130,448 130,98 228,98" fill="none" stroke="currentColor" stroke-width="1.3" marker-end="url(#fa)"/>
+        <text x="138" y="276" font-size="10.5" fill="#555">loop</text>
+
+        <!-- lazy-deletion skip back to extract -->
+        <polyline points="240,230 150,230 150,166 248,166" fill="none" stroke="#000" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#fa)"/>
+        <text x="158" y="202" font-size="10.5" fill="#000">yes, skip</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 4 · A* control flow</b>
+      The orange path is lazy deletion. A stale duplicate of an already-closed cell costs one pop and is discarded, which is cheaper than maintaining a decrease-key index in every structure.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 6. OPEN LISTS ===================== -->
+<section id="open">
+  <h2 class="sec"><span class="num">06</span>The three OPEN lists</h2>
+  <p>All three satisfy the same three-method contract. Only the body changes.</p>
+
+  <div class="algo">
+    <header><span class="name">UNSORTED-ARRAY — the baseline</span><span class="cx">insert O(1) · extract O(n)</span></header>
+<pre>insert(cell, f):      append (cell, f) to the back
+extract_min():        scan every entry, remember the smallest f,
+                      swap it with the back, pop the back
+</pre>
+  </div>
+
+  <div class="algo">
+    <header><span class="name">BINARY-MIN-HEAP</span><span class="cx">insert O(log n) · extract O(log n)</span></header>
+<pre>insert(cell, f):
+    append to the back
+    <span class="kw">while</span> node &lt; parent:  swap, move up        <span class="cm">// sift-up</span>
+
+extract_min():
+    root <span class="kw">←</span> a[0]
+    a[0] <span class="kw">←</span> last element, shrink by one
+    <span class="kw">while</span> node &gt; smaller child:  swap, move down   <span class="cm">// sift-down</span>
+    <span class="kw">return</span> root
+
+<span class="cm">// Stored as a flat array: children of i are 2i+1 and 2i+2.
+// No node objects, no pointers, so the whole frontier stays cache-resident.</span>
+</pre>
+  </div>
+
+  <div class="algo">
+    <header><span class="name">BUCKET (DIAL) QUEUE</span><span class="cx">insert O(1) · extract O(1) amortised</span></header>
+<pre>SPAN <span class="kw">←</span> <span class="hl">2 · 1414 + 1</span>                 <span class="cm">// see the derivation below</span>
+buckets[0 … SPAN−1] <span class="kw">←</span> empty lists
+scan <span class="kw">←</span> −1
+
+insert(cell, f):
+    b <span class="kw">←</span> f mod SPAN
+    push cell onto buckets[b]
+    <span class="kw">if</span> scan &lt; 0 <span class="kw">then</span> scan <span class="kw">←</span> b
+
+extract_min():
+    <span class="kw">while</span> buckets[scan] is empty:  scan <span class="kw">←</span> (scan + 1) mod SPAN
+    <span class="kw">return</span> pop back of buckets[scan]
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="tag">The window must be 2C+1, not C+1</span>
+    <p>Dijkstra's bound says a successor key exceeds the current minimum by at most one edge cost, so <code>C+1</code> buckets suffice. A* is different. For a successor <code>v</code> of <code>u</code>:</p>
+    <p style="font-family:var(--font-mono);font-size:13px;margin:10px 0">f(v) = g(u) + c + h(v) = f(u) − h(u) + c + h(v)</p>
+    <p>Consistency gives <code>h(v) − h(u) ≤ c</code>, so <code>f(v) ≤ f(u) + 2c</code>. The spread is twice as wide, and sizing at <code>C+1</code> makes distant keys alias onto occupied buckets. The queue then returns cells out of order and the route is no longer optimal. This was a real defect in the first version: it returned cost 43006 where the heap returned 41592 on the same map, and only the cross-structure test caught it.</p>
+  </div>
+</section>
+
+<!-- ===================== 7. KNAPSACK ===================== -->
+<section id="knapsack">
+  <h2 class="sec"><span class="num">07</span>Waypoint selection</h2>
+  <p>The drone cannot serve every delivery on one battery. Each waypoint carries a value and a battery cost; the task is to pick the subset of greatest total value that fits the budget. A waypoint cannot be half visited, so this is 0/1 and not fractional, and the greedy value-per-unit argument does not hold.</p>
+
+  <div class="algo">
+    <header><span class="name">KNAPSACK-SELECT(waypoints, budget)</span><span class="cx">O(n × W) time and table space</span></header>
+<pre><span class="kw">for</span> i <span class="kw">←</span> 0 <span class="kw">to</span> n:  dp[i][0] <span class="kw">←</span> 0
+<span class="kw">for</span> w <span class="kw">←</span> 0 <span class="kw">to</span> W:  dp[0][w] <span class="kw">←</span> 0
+
+<span class="kw">for</span> i <span class="kw">←</span> 1 <span class="kw">to</span> n <span class="kw">do</span>
+    <span class="kw">for</span> w <span class="kw">←</span> 0 <span class="kw">to</span> W <span class="kw">do</span>
+        skip <span class="kw">←</span> dp[i−1][w]
+        <span class="kw">if</span> cost[i] ≤ w <span class="kw">then</span>
+            take <span class="kw">←</span> dp[i−1][w − cost[i]] + value[i]
+            dp[i][w] <span class="kw">←</span> max(skip, take)
+        <span class="kw">else</span>
+            dp[i][w] <span class="kw">←</span> skip
+
+<span class="cm">// Traceback: walk the last column upward and ask, at each row,
+// whether the value changed. If it did, item i was taken.</span>
+w <span class="kw">←</span> W ;  chosen <span class="kw">←</span> ∅
+<span class="kw">for</span> i <span class="kw">←</span> n <span class="kw">down to</span> 1 <span class="kw">do</span>
+    <span class="kw">if</span> <span class="hl">dp[i][w] ≠ dp[i−1][w]</span> <span class="kw">then</span>
+        chosen <span class="kw">←</span> chosen ∪ {i}
+        w <span class="kw">←</span> w − cost[i]
+<span class="kw">return</span> reverse(chosen), dp[n][W]
+</pre>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 700 300" role="img" aria-label="The knapsack table filled row by row, each cell reading two cells from the row above, with a traceback path walking back up the final column.">
+      <defs>
+        <marker id="ka" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+        <marker id="kaS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="#000"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+        <text x="20" y="22" font-size="10.5" fill="#000" letter-spacing="1.2">dp[i][w] — rows are waypoints, columns are remaining battery</text>
+
+        <!-- grid 6 cols x 5 rows -->
+        <g stroke="currentColor" stroke-width="0.9" fill="none" opacity="0.55">
+          <rect x="90" y="40" width="420" height="200"/>
+          <line x1="160" y1="40" x2="160" y2="240"/><line x1="230" y1="40" x2="230" y2="240"/>
+          <line x1="300" y1="40" x2="300" y2="240"/><line x1="370" y1="40" x2="370" y2="240"/>
+          <line x1="440" y1="40" x2="440" y2="240"/>
+          <line x1="90" y1="80" x2="510" y2="80"/><line x1="90" y1="120" x2="510" y2="120"/>
+          <line x1="90" y1="160" x2="510" y2="160"/><line x1="90" y1="200" x2="510" y2="200"/>
+        </g>
+
+        <!-- the two source cells (row i-1) and the target (row i) -->
+        <rect x="160" y="120" width="70" height="40" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <text x="195" y="135" text-anchor="middle" font-size="10.5">take</text>
+        <text x="195" y="150" text-anchor="middle" font-size="9.5" fill="#555">w − cost</text>
+        <rect x="300" y="120" width="70" height="40" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <text x="335" y="135" text-anchor="middle" font-size="10.5">skip</text>
+        <text x="335" y="150" text-anchor="middle" font-size="9.5" fill="#555">same w</text>
+        <rect x="300" y="160" width="70" height="40" fill="none" stroke="#000" stroke-width="2"/>
+        <text x="335" y="178" text-anchor="middle" font-size="10.5" fill="#000">max of</text>
+        <text x="335" y="192" text-anchor="middle" font-size="10.5" fill="#000">the two</text>
+
+        <line x1="206" y1="156" x2="316" y2="176" stroke="currentColor" stroke-width="1.3" marker-end="url(#ka)"/>
+        <line x1="348" y1="156" x2="348" y2="176" stroke="currentColor" stroke-width="1.3" marker-end="url(#ka)"/>
+
+        <text x="24" y="145" font-size="10.5" fill="#555">row i−1</text>
+        <text x="24" y="185" font-size="10.5" fill="#555">row i</text>
+        <text x="100" y="262" font-size="10.5" fill="#555">w = 0</text>
+        <text x="455" y="262" font-size="10.5" fill="#555">w = budget</text>
+
+        <!-- traceback: a staircase up the empty right-hand columns -->
+        <polyline points="475,230 475,150 405,150 405,70"
+                  fill="none" stroke="#000" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#kaS)"/>
+        <text x="528" y="196" font-size="11" fill="#000">traceback:</text>
+        <text x="528" y="212" font-size="11" fill="#000">value changed</text>
+        <text x="528" y="228" font-size="11" fill="#000">⇒ item taken</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 5 · Filling the table, then reading the answer out of it</b>
+      Each cell needs exactly two cells from the row above, so the table fills in one pass. The table alone gives the best <em>value</em>; the subset itself only comes from walking back up through it.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="tag">Measured, including where it loses</span>
+    <p>The table costs <code>O(n × W)</code> whatever <code>n</code> is, so at small input sizes exhaustive subset search wins outright. The crossover is at <strong>14 items</strong>. At 22 items the table runs in 0.034 ms against 201.42 ms. Reporting only the favourable size would have hidden half the story, so the sweep reports every size from 8 to 24.</p>
+  </div>
+</section>
+
+<!-- ===================== 8. TSP ===================== -->
+<section id="tsp">
+  <h2 class="sec"><span class="num">08</span>Visiting order</h2>
+  <p>Once the stops are chosen, the order they are served in decides the distance flown. Plain backtracking walks every permutation. Branch and bound walks the same tree but refuses to enter a branch whose best possible completion already costs more than the best full tour found so far.</p>
+
+  <div class="algo">
+    <header><span class="name">BOUND(cost_so_far)</span><span class="cx">O(n) · must never overestimate</span></header>
+<pre>b <span class="kw">←</span> cost_so_far
+<span class="kw">for each</span> stop i <span class="kw">not yet</span> visited <span class="kw">do</span>
+    b <span class="kw">←</span> b + cheapest_outgoing_edge[i]
+<span class="kw">return</span> b
+
+<span class="cm">// Any real completion must leave every unvisited stop along some edge,
+// and no edge is cheaper than that stop's cheapest one. So b can never
+// exceed the true completion cost. A bound that could overestimate
+// would prune the optimum and return a worse tour, silently.</span>
+</pre>
+  </div>
+
+  <div class="algo">
+    <header><span class="name">TSP-BRANCH-AND-BOUND(depot)</span><span class="cx">O(n!) worst case · pruned in practice</span></header>
+<pre>best <span class="kw">←</span> ∞
+visit(depot) ; RECURSE(depot, depot, depth = 1, cost = 0)
+
+RECURSE(depot, at, depth, cost):
+    nodes_explored <span class="kw">←</span> nodes_explored + 1
+
+    <span class="kw">if</span> depth = n <span class="kw">then</span>                      <span class="cm">// tour complete, close it</span>
+        total <span class="kw">←</span> cost + d[at][depot]
+        <span class="kw">if</span> total &lt; best <span class="kw">then</span> best <span class="kw">←</span> total ; best_order <span class="kw">←</span> path
+        <span class="kw">return</span>
+
+    <span class="kw">for each</span> unvisited next <span class="kw">do</span>
+        step <span class="kw">←</span> cost + d[at][next]
+        mark next visited ; push next onto path
+        <span class="hl">if BOUND(step) &lt; best then</span>            <span class="cm">// ← the only line that differs</span>
+            RECURSE(depot, next, depth + 1, step)
+        <span class="kw">else</span>
+            nodes_pruned <span class="kw">←</span> nodes_pruned + 1
+        pop path ; unmark next
+</pre>
+  </div>
+
+  <p>Deleting that one highlighted test turns the procedure into plain backtracking, which is exactly how the control is implemented. Both return the identical optimal tour at every size tested; only the amount of tree searched differs.</p>
+
+  <figure>
+    <svg viewBox="0 0 700 300" role="img" aria-label="A permutation tree where three branches are cut by the bound, with node counts showing ninety-nine point three percent of nodes avoided at eleven stops.">
+      <defs>
+        <marker id="ta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <polygon points="0,0 10,5 0,10" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">
+        <circle cx="350" cy="36" r="15" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="350" y="40" text-anchor="middle" font-size="10">W0</text>
+
+        <g stroke="currentColor" stroke-width="1.2">
+          <line x1="340" y1="48" x2="200" y2="92"/>
+          <line x1="350" y1="51" x2="350" y2="92"/>
+          <line x1="360" y1="48" x2="500" y2="92"/>
+        </g>
+        <circle cx="200" cy="106" r="15" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="200" y="110" text-anchor="middle" font-size="10">W2</text>
+        <circle cx="350" cy="106" r="15" fill="none" stroke="#000" stroke-width="1.6"/>
+        <text x="350" y="110" text-anchor="middle" font-size="10" fill="#000">W5</text>
+        <circle cx="500" cy="106" r="15" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="500" y="110" text-anchor="middle" font-size="10">W6</text>
+
+        <!-- pruned branch -->
+        <line x1="350" y1="121" x2="350" y2="162" stroke="#000" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <line x1="336" y1="134" x2="364" y2="150" stroke="#000" stroke-width="2"/>
+        <line x1="364" y1="134" x2="336" y2="150" stroke="#000" stroke-width="2"/>
+        <text x="378" y="148" font-size="10.5" fill="#000">bound ≥ best ⇒ cut</text>
+
+        <g stroke="currentColor" stroke-width="1.2">
+          <line x1="192" y1="120" x2="140" y2="162"/>
+          <line x1="208" y1="120" x2="258" y2="162"/>
+          <line x1="492" y1="120" x2="448" y2="162"/>
+          <line x1="508" y1="120" x2="556" y2="162"/>
+        </g>
+        <circle cx="134" cy="176" r="14" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <circle cx="264" cy="176" r="14" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <circle cx="442" cy="176" r="14" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <circle cx="562" cy="176" r="14" fill="none" stroke="currentColor" stroke-width="1.2"/>
+
+        <g stroke="currentColor" stroke-width="1" opacity="0.5">
+          <line x1="128" y1="190" x2="110" y2="218"/><line x1="140" y1="190" x2="158" y2="218"/>
+          <line x1="258" y1="190" x2="240" y2="218"/><line x1="270" y1="190" x2="288" y2="218"/>
+          <line x1="436" y1="190" x2="418" y2="218"/><line x1="448" y1="190" x2="466" y2="218"/>
+          <line x1="556" y1="190" x2="538" y2="218"/><line x1="568" y1="190" x2="586" y2="218"/>
+        </g>
+        <text x="350" y="232" text-anchor="middle" font-size="10.5" fill="#555">… the remaining permutations …</text>
+
+        <rect x="120" y="252" width="460" height="34" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="350" y="273" text-anchor="middle" font-size="11.5">at 11 stops: backtracking 9,864,101 nodes  ·  bounded 70,590  ·  99.3% avoided</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 6 · Where the bound saves work</b>
+      A cut removes an entire subtree, not one node, which is why the saving compounds with depth. Below about seven stops the bound costs more to compute than it saves and plain backtracking is faster; that crossover is reported rather than hidden.</figcaption>
+  </figure>
+</section>
+
+<!-- ===================== 9. SCREENS ===================== -->
+<section id="screens">
+  <h2 class="sec"><span class="num">09</span>Screen wireframes</h2>
+  <p>There is no graphical interface. The program is four executables that print to a terminal, and the layout of that output is the interface, so it is designed rather than left to chance: a banner, then one labelled block per stage, with the verifier's verdict on the same screen as the result it checks.</p>
+
+  <div class="term">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="path">./mission</span></div>
+<pre>================================================
+ Mission planning: A* feeds selection, then ordering
+================================================
+
+SEARCH    A* builds the distance matrix
+  10 waypoints, 45 A* runs, 0.9 ms
+
+KNAPSACK  0/1 selection: which stops to serve
+  battery budget  : 900 units
+  selected        : W1 W2 W3 W5 W6
+  total value     : 315
+  battery used    : 890 of 900
+  DP table cells  : 9911
+  brute force     : value 315 over 1024 subsets, 0.04 ms
+  agreement       : YES, DP matches the exhaustive answer
+
+ORDERING  Travelling Salesman over the 6 selected stops
+  backtracking    : cost 154.114   nodes      326   0.01 ms
+  branch &amp; bound  : cost 154.114   nodes      217   0.01 ms
+  same optimum    : YES, pruning is safe
+  nodes avoided   : 33.4%
+  visiting order  : W0 W2 W3 W1 W5 W6 -&gt; W0 (return to depot)</pre>
+  </div>
+
+  <div class="term">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="path">./tests</span></div>
+<pre>Test 2: all three structures agree on 50 random maps
+  [PASS] all three agree on reachability
+  [PASS] all three return the same optimal cost
+
+Test 6: bucket queue matches heap ordering
+  [PASS] identical optimal cost
+       heap: cost=41592 exp=62 | bucket: cost=41592 exp=32
+       (tie-breaking differs by 48%)
+
+ALL TESTS PASSED (0 failures)</pre>
+  </div>
+
+  <div class="term">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="path">./scaling</span></div>
+<pre>KNAPSACK  DP table against exhaustive subset search
+
+  items      DP cells      subsets      ratio     brute ms      DP ms
+  ---------------------------------------------------------------------
+  12            11713         4096       0.3x      0.2319      0.011
+  14            13515        16384       1.2x      0.6502      0.018   &lt;- crossover
+  16            15317        65536       4.3x      2.7423      0.014
+  22            20723      4194304     202.4x      201.42      0.034</pre>
+  </div>
+
+  <p>Three design rules hold across all of them. A measured number never appears without the unit it was measured in. A claim and its check sit adjacent, so <code>agreement : YES</code> is never more than a line away from the value it confirms. And the crossover row is marked rather than omitted.</p>
+</section>
+
+<!-- ===================== 10. COMPLEXITY ===================== -->
+<section id="complexity">
+  <h2 class="sec"><span class="num">10</span>Complexity summary</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Component</th><th>Operation</th><th>Best</th><th>Worst</th><th>Space</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>Occupancy grid</td><td>cell lookup</td><td class="n">O(1)</td><td class="n">O(1)</td><td class="n">O(W·H) bits</td><td class="yes">kept</td></tr>
+        <tr><td>Unsorted array</td><td>extract-min</td><td class="n">O(1) insert</td><td class="n">O(n)</td><td class="n">O(n)</td><td class="no">baseline only</td></tr>
+        <tr><td>Binary min-heap</td><td>extract-min</td><td class="n">O(1) peek</td><td class="n">O(log n)</td><td class="n">O(n)</td><td class="yes">kept</td></tr>
+        <tr><td>Bucket queue</td><td>extract-min</td><td class="n">O(1)</td><td class="n">O(1) amort.</td><td class="n">O(n + 2C)</td><td class="pick">fastest</td></tr>
+        <tr><td>A* over the grid</td><td>full plan</td><td class="n">O(E)</td><td class="n">exponential</td><td class="n">O(V)</td><td class="yes">kept</td></tr>
+        <tr><td>Adjacency matrix</td><td>edge lookup</td><td class="n">O(1)</td><td class="n">O(1)</td><td class="n">O(V²) ≈ 4.29 GB</td><td class="no">rejected</td></tr>
+        <tr><td>Binary search tree</td><td>extract-min</td><td class="n">O(log n)</td><td class="n">O(n)</td><td class="n">O(n)</td><td class="no">rejected</td></tr>
+        <tr><td>0/1 Knapsack</td><td>fill + traceback</td><td class="n">O(n·W)</td><td class="n">O(n·W)</td><td class="n">O(n·W)</td><td class="yes">kept</td></tr>
+        <tr><td>Backtracking TSP</td><td>full search</td><td class="n">O(n!)</td><td class="n">O(n!)</td><td class="n">O(n)</td><td class="no">control</td></tr>
+        <tr><td>Branch and Bound</td><td>pruned search</td><td class="n">depends</td><td class="n">O(n!)</td><td class="n">O(n)</td><td class="pick">kept</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The adjacency matrix figure is for a 256 × 256 grid: 65,536 vertices, so 65,536² entries, against roughly 0.5 MB for the adjacency list. That is the single clearest reason the grid is never materialised as an explicit graph.</p>
+</section>
+
+<!-- ===================== 11. TESTS ===================== -->
+<section id="tests">
+  <h2 class="sec"><span class="num">11</span>Test plan</h2>
+  <p>Six tests, and one of them is load-bearing. Test 2 is the only one that could have caught the bucket-queue window bug, because a single-structure test has nothing to disagree with.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>#</th><th>What it checks</th><th>Why it exists</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td>Empty 10×10 grid, corner to corner</td><td>Cost must be exactly nine diagonal steps, 12726. A hand-computable answer anchors the cost model.</td></tr>
+        <tr><td class="n">2</td><td>All three structures over 50 random maps</td><td class="pick">Cross-check. Any disagreement on route cost means a structure is returning cells out of order. This is the test that failed on the C+1 window.</td></tr>
+        <tr><td class="n">3</td><td>A solid wall admits no path</td><td>Obstacles are respected and the search terminates instead of looping.</td></tr>
+        <tr><td class="n">4</td><td>A wall with a gap is routed through</td><td>The returned path contains no blocked cell, checked cell by cell.</td></tr>
+        <tr><td class="n">5</td><td>Heap invariant under mixed operations</td><td>Extract-min returns keys in sorted order after interleaved inserts.</td></tr>
+        <tr><td class="n">6</td><td>Bucket and heap on one map</td><td>Same optimal cost, different expansion counts. The difference is tie-breaking, not error, so the test asserts cost and reports the gap.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="tag">A prediction that turned out wrong</span>
+    <p>The design argued that insertions outnumber extractions roughly 8 to 1, since each expansion generates up to eight neighbours, and used that to favour structures with cheap insertion. Measured on a 256 × 256 grid the ratio is <strong>1.20 to 1</strong>: most neighbours are rejected before insertion because they are already closed, blocked, or no improvement. The original claim is corrected in place rather than deleted, because the reasoning behind it is still worth seeing.</p>
+  </div>
+</section>
+
+<footer>
+  Design book · Review 2 · Month 2 · built against g++ 13.3.0, C++17, −O2 −Wall −Wextra<br>
+  Timings are medians on one machine; ratios hold across machines, absolute milliseconds do not.
+</footer>
+
+</div>
+
+</body></html>

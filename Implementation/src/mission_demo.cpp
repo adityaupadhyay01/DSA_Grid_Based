@@ -1,8 +1,8 @@
-// Units 3 and 4 demonstration.
+// Mission demonstration.
 //
-// A* (Units 1-2) supplies the distances. Knapsack (Unit 3) chooses which
-// stops are worth serving on the available battery. Branch and bound (Unit 4)
-// decides the order to serve them in.
+// A* supplies the pairwise distances. The 0/1 Knapsack chooses which stops
+// are worth serving on the battery the drone actually has. Branch and bound
+// then fixes the order they are served in.
 #include <cstdio>
 #include <chrono>
 #include "grid.hpp"
@@ -33,17 +33,17 @@ int main() {
     for (auto& w : wps) g.set_blocked(g.x_of(w.cell), g.y_of(w.cell), false);
 
     std::printf("================================================\n");
-    std::printf(" Mission planning: Units 1-2 feed Units 3 and 4\n");
+    std::printf(" Mission planning: A* feeds selection, then ordering\n");
     std::printf("================================================\n\n");
 
-    std::printf("UNITS 1-2  A* builds the distance matrix\n");
+    std::printf("SEARCH    A* builds the distance matrix\n");
     auto t0 = Clock::now();
     auto dist = build_distance_matrix(g, wps);
     auto t1 = Clock::now();
     std::printf("  %zu waypoints, %zu A* runs, %.1f ms\n\n",
                 wps.size(), wps.size() * (wps.size() - 1) / 2, ms(t0, t1));
 
-    std::printf("UNIT 3  0/1 Knapsack: which stops to serve\n");
+    std::printf("KNAPSACK  0/1 selection: which stops to serve\n");
     const int budget = 900;
     auto ks = knapsack_select(wps, budget);
     std::printf("  battery budget  : %d units\n", budget);
@@ -74,7 +74,7 @@ int main() {
         for (int j = 0; j < m; ++j)
             sub[i][j] = dist[tour_idx[i]][tour_idx[j]];
 
-    std::printf("UNIT 4  TSP over the %d selected stops\n", m);
+    std::printf("\nORDERING  Travelling Salesman over the %d selected stops\n", m);
     auto t4 = Clock::now();
     BacktrackingTSP   bt(sub);  auto rbt = bt.solve(0);
     auto t5 = Clock::now();
@@ -91,7 +91,6 @@ int main() {
                 100.0 * (double)(rbt.nodes_explored - rbb.nodes_explored)
                       / (double)rbt.nodes_explored);
     std::printf("  branches pruned : %zu\n", rbb.nodes_pruned);
-    std::printf("  speedup         : %.1fx\n", ms(t4, t5) / ms(t5, t6));
     std::printf("  visiting order  : ");
     for (int i : rbb.order) std::printf("W%d ", tour_idx[i]);
     std::printf("-> W%d (return to depot)\n", tour_idx[rbb.order[0]]);

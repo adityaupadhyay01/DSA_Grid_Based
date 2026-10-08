@@ -22,8 +22,10 @@ bench: planner
 	./planner 0.20 10 > results.csv
 	@echo "results written to results.csv"
 
+# results.csv is committed evidence, so clean does not touch it.
+# Regenerate it deliberately with `make bench`.
 clean:
-	rm -f planner tests results.csv
+	rm -f planner tests mission scaling
 
 mission: src/mission_demo.cpp include/*.hpp
 	$(CXX) $(CXXFLAGS) src/mission_demo.cpp -o mission

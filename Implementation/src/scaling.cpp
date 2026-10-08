@@ -1,4 +1,4 @@
-// Where do Unit 3 and Unit 4 actually start paying off?
+// Where do the dynamic programming table and the bound actually start paying off?
 //
 // At small n the clever method can do more work than the naive one. Reporting
 // only a favourable size would be dishonest, so this sweeps the size and finds
@@ -18,7 +18,7 @@ int main() {
     std::mt19937 rng(2026);
     std::uniform_int_distribution<int> val(20, 100), cst(80, 280);
 
-    std::printf("UNIT 3  Knapsack: DP against exhaustive subset search\n");
+    std::printf("KNAPSACK  DP table against exhaustive subset search\n");
     std::printf("  budget fixed at 900 units\n\n");
     std::printf("  %-6s %12s %12s %10s %12s %10s\n",
                 "items", "DP cells", "subsets", "ratio", "brute ms", "DP ms");
@@ -53,13 +53,13 @@ int main() {
                     (bf >= 0 && bf != ks.total_value) ? "  MISMATCH" : "");
     }
 
-    std::printf("\nUNIT 4  TSP: branch and bound against plain backtracking\n\n");
+    std::printf("\nORDERING  branch and bound against plain backtracking\n\n");
     std::printf("  %-7s %12s %12s %10s %11s %11s\n",
                 "stops", "backtrack", "B&B nodes", "avoided", "backtrack ms", "B&B ms");
     std::printf("  %s\n", "---------------------------------------------------------------------");
 
     for (int m = 5; m <= 11; ++m) {
-        // Random symmetric distance matrix, same for both solvers.
+        // Random symmetric distance matrix, the same one for both solvers.
         std::vector<std::vector<int>> d(m, std::vector<int>(m, 0));
         std::uniform_int_distribution<int> dd(5000, 60000);
         for (int i = 0; i < m; ++i)

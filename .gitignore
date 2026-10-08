@@ -1,0 +1,7 @@
+planner
+tests
+mission
+scaling
+*.o
+__pycache__/
+.DS_Store

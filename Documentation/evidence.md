@@ -3,7 +3,7 @@
 **Project:** Grid-Based Drone Path Planning Simulation
 **Student:** Aditya Upadhyay · 2501330100038 · B.Tech CSE-A, Semester III
 **Course:** Data Structures and Algorithms II (CCSE0301) · Faculty: Mr. Shamshad Ali
-**Review:** 1 · Month 1
+**Review:** 2 · Month 2
 
 ---
 
@@ -16,6 +16,7 @@ This is where the research gap comes from.
 | **Citation** | Gao, W., Li, L., & Pang, D. (2026). Urban low-altitude UAV path planning by fusing an enhanced A* algorithm with an adaptive artificial potential field method. *Scientific Reports, 16*, Article 18275. |
 | **Link** | https://doi.org/10.1038/s41598-026-45160-6 |
 | **Direct PDF** | https://www.nature.com/articles/s41598-026-45160-6.pdf |
+| **Access** | Open Access, free, no login |
 | **Used for** | The gap: the paper reports every result as computation time but never says what structure holds its OPEN list. |
 
 **Read at minimum:** the Abstract, the Introduction, and the subsection headed "A* Algorithm". That subsection is where the OPEN list is described in words only. That is the evidence for the gap.
@@ -36,6 +37,11 @@ The first three are the ones cited in Field 6 of the report. The rest are backgr
 | 6 | Sturtevant, N. R. (2012). Benchmarks for Grid-Based Pathfinding. *IEEE TCIAIG, 4*(2), 144–148. | https://doi.org/10.1109/TCIAIG.2012.2197681 | Background — test maps for Review 2 |
 | 7 | Hornung, A., Wurm, K. M., Bennewitz, M., Stachniss, C., & Burgard, W. (2013). OctoMap. *Autonomous Robots, 34*(3), 189–206. | https://doi.org/10.1007/s10514-012-9321-0 | Background — 3D map storage |
 | 8 | Harabor, D., & Grastien, A. (2011). Online Graph Pruning for Pathfinding on Grid Maps. *AAAI, 25*, 1114–1119. | https://doi.org/10.1609/aaai.v25i1.7994 | Background — cutting search cost |
+
+**Free to read now:** #1 (Nature, open access), #2 (MDPI), #8 (AAAI hosts the PDF).
+**May need institutional login:** #3, #4, #5, #6, #7. Check NIET's IEEE / Springer / SAGE access. Abstracts are public either way.
+
+> ⚠️ Verify paper #3's author initials, journal name, volume and page numbers before final submission. The DOI and title are confirmed; the full bibliographic record is not.
 
 ---
 
@@ -58,6 +64,8 @@ https://theory.stanford.edu/~amitp/GameProgramming/index.html
 Go to **Implementation Notes → Set representation**. It lists exactly the OPEN-list structures this project compares:
 
 > unsorted arrays or linked lists · sorted arrays · **binary heaps** · sorted skip lists · indexed arrays · hash tables · splay trees · **bucketing**
+
+This is citable support that OPEN-list choice is a recognised design decision. That is precisely why the base paper leaving it unstated counts as a real gap and not nitpicking. **Cite this one.**
 
 ### Others
 
@@ -102,9 +110,42 @@ If Mr. Ali asks "where did this come from", this table is the answer. Every row 
 
 | | |
 |---|---|
-| **GitHub** | `https://github.com/adityaupadhyay01/DSA_Grid_Based.git` |
-| **Contains** | Research papers folder and README now; simulation code, diagrams and timing tables from Review 2 onwards |
+| **GitHub** | `https://github.com/adityaupadhyay01/<repo-name>` |
+| **Contains** | The C++17 source, the six-test suite, the benchmark harness and plotting script, the recorded outputs and charts, and the design book under `docs/` |
 
 ---
 
-*Last updated: Month 1 / Review 1. Extended at each review as new sources are used.*
+---
+
+## 8. Added for Review 2
+
+Nothing from Review 1 was dropped. These are the sources and artefacts that came in
+while the planner was being built.
+
+| Item | Where it is | What it gave the project |
+|---|---|---|
+| Cormen et al., *Introduction to Algorithms* (4th ed.), heap chapter | Library copy | Sift-up and sift-down, and the proof that BUILD-HEAP is O(n) rather than O(n log n) |
+| Dial's bucket queue, as described in Amit Patel's "Set representation" notes | https://theory.stanford.edu/~amitp/GameProgramming/ | The O(1) frontier structure, and the warning that it needs bounded integer costs |
+| Cormen et al., dynamic programming chapter | Library copy | 0/1 Knapsack table and traceback; why the greedy exchange argument fails for the 0/1 case |
+| Cormen et al., branch-and-bound material | Library copy | The requirement that a bound never overestimate, which the design book works through |
+| NIET DSA-II course material, Units 3 and 4 | Moodle | Dynamic programming, backtracking and branch and bound as taught in the syllabus |
+
+**My own work, recorded in this repository:**
+
+| Artefact | File |
+|---|---|
+| Design book: layers, pseudocode, flowcharts, screen wireframes, complexity and test plan | `docs/DESIGN.md`, `docs/Drone_Planner_Design_Book.pdf` |
+| Full project documentation, sixteen sections | `docs/PROJECT_DOCUMENTATION.md` |
+| Base paper and the research gap, written out | `docs/RESEARCH_GAP.md` |
+| Measured benchmark data | `results.csv`, `runtime.png`, `expansions.png` |
+| Recorded console runs | `test_output.txt`, `mission_output.txt`, `scaling_output.txt` |
+| Phased build plan | `BUILD_PLAN.md` |
+
+Two findings in the design book are my own and are not taken from any source: the
+2C+1 window derivation for the bucket queue under a consistent heuristic, and the
+measured insert-to-extract ratio of 1.20:1, which corrected an earlier estimate of
+8:1 that I had reasoned from the branching factor.
+
+---
+
+*Last updated: Month 2 / Review 2. Extended at each review as new sources are used.*

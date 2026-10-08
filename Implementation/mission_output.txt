@@ -1,25 +1,25 @@
 ================================================
- Mission planning: Units 1-2 feed Units 3 and 4
+ Mission planning: A* feeds selection, then ordering
 ================================================
 
-UNITS 1-2  A* builds the distance matrix
-  10 waypoints, 45 A* runs, 1.0 ms
+SEARCH    A* builds the distance matrix
+  10 waypoints, 45 A* runs, 0.9 ms
 
-UNIT 3  0/1 Knapsack: which stops to serve
+KNAPSACK  0/1 selection: which stops to serve
   battery budget  : 900 units
   selected        : W1 W2 W3 W5 W6 
   total value     : 315
   battery used    : 890 of 900
   DP table cells  : 9911
-  brute force     : value 315 over 1024 subsets, 0.05 ms
+  brute force     : value 315 over 1024 subsets, 0.04 ms
   agreement       : YES, DP matches the exhaustive answer
   work ratio      : 0.1x fewer operations than brute force
 
-UNIT 4  TSP over the 6 selected stops
+
+ORDERING  Travelling Salesman over the 6 selected stops
   backtracking    : cost 154.114   nodes      326   0.01 ms
   branch & bound  : cost 154.114   nodes      217   0.01 ms
   same optimum    : YES, pruning is safe
   nodes avoided   : 33.4%
   branches pruned : 55
-  speedup         : 0.7x
   visiting order  : W0 W2 W3 W1 W5 W6 -> W0 (return to depot)

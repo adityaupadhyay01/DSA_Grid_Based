@@ -8,16 +8,16 @@
 #include "open_list.hpp"
 
 // ---------------------------------------------------------------------------
-// Mission layer: Units 3 and 4.
+// Mission layer: dynamic programming and state-space search on the planner.
 //
-// The Unit 1/2 planner answers "what is the cheapest route between two cells".
-// A real delivery mission asks two further questions that A* cannot answer:
+// The planner answers "what is the cheapest route between two cells".
+// A delivery mission asks a further question that A* cannot answer:
 //
-//   Unit 3  Which waypoints should be visited at all, given a battery budget?
-//           -> 0/1 Knapsack, solved by dynamic programming
+//   Which waypoints should be visited at all, given a battery budget?
+//   -> 0/1 Knapsack, solved by dynamic programming
 //
-//   Unit 4  In what order should the chosen ones be visited?
-//           -> Travelling Salesman, solved by branch and bound
+//   In what order should the chosen ones be visited?
+//   -> Travelling Salesman, solved by branch and bound
 //
 // A* supplies the pairwise distances both layers depend on.
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ struct Waypoint {
 
 // ---------------------------------------------------------------------------
 // Distance matrix built by running A* between every pair of waypoints.
-// This is where Units 1 and 2 feed Units 3 and 4.
+// This is where the search layer feeds the mission layer.
 // ---------------------------------------------------------------------------
 inline std::vector<std::vector<int>>
 build_distance_matrix(const Grid& grid, const std::vector<Waypoint>& wps) {
@@ -48,7 +48,7 @@ build_distance_matrix(const Grid& grid, const std::vector<Waypoint>& wps) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT 3 — 0/1 Knapsack by dynamic programming.
+// 0/1 Knapsack by dynamic programming.
 //
 // Choose the subset of waypoints with the greatest total value whose combined
 // battery cost fits the budget. Each waypoint is taken once or not at all,
@@ -121,142 +121,147 @@ inline int knapsack_bruteforce(const std::vector<Waypoint>& wps, int budget,
 }
 
 // ---------------------------------------------------------------------------
-// UNIT 4 — Travelling Salesman by branch and bound.
+// Visiting order: Travelling Salesman by branch and bound.
 //
-// Visit every chosen waypoint exactly once, starting and ending at the depot,
-// minimising total distance. Distances come from A*.
+// Once the knapsack has chosen which stops to serve, the remaining question is
+// the order to serve them in. Plain backtracking walks every permutation, so
+// the tree holds O(n!) nodes. Branch and bound adds a lower bound on the best
+// possible completion of a partial tour and abandons any branch whose bound
+// already exceeds the best complete tour found so far. The answer is identical;
+// only the amount of tree searched changes.
 //
-// Backtracking alone explores every permutation: O(n!). Branch and bound adds
-// a lower bound on the best completion of a partial tour, and abandons any
-// branch whose bound already exceeds the best complete tour found. The answer
-// is still exact; only the search shrinks.
-//
-// Bound used: cost so far, plus for every unvisited city the cheapest edge
-// leaving it. That can never exceed the true remaining cost, so pruning on it
-// never discards the optimum.
+// The bound used here is: cost committed so far, plus the cheapest outgoing
+// edge of every stop not yet visited. That can never overstate the true
+// completion cost, because any real completion must leave each unvisited stop
+// along some edge, and no edge is cheaper than that stop's cheapest one. A
+// bound that could overstate would prune the optimum and silently return a
+// worse tour.
 // ---------------------------------------------------------------------------
+
 struct TourResult {
-    int  cost = 0;
-    std::vector<int> order;           // indices into the distance matrix
-    size_t nodes_explored = 0;        // branch-and-bound search tree nodes
+    std::vector<int> order;           // visiting order, starting at the depot
+    int    cost           = 0;        // closed tour cost, depot back to depot
+    size_t nodes_explored = 0;        // nodes entered in the search tree
     size_t nodes_pruned   = 0;        // branches cut by the bound
 };
 
 class BranchAndBoundTSP {
 public:
     explicit BranchAndBoundTSP(const std::vector<std::vector<int>>& d)
-        : d_(d), n_(static_cast<int>(d.size())),
-          visited_(d.size(), false), best_(std::numeric_limits<int>::max()) {
-        min_out_.resize(n_);
-        for (int i = 0; i < n_; ++i) {                 // cheapest edge from each city
-            int m = std::numeric_limits<int>::max();
+        : d_(d), n_(static_cast<int>(d.size())) {
+        // Cheapest outgoing edge per stop, precomputed once for the bound.
+        cheapest_.assign(n_, 0);
+        for (int i = 0; i < n_; ++i) {
+            int best = std::numeric_limits<int>::max();
             for (int j = 0; j < n_; ++j)
-                if (i != j) m = std::min(m, d_[i][j]);
-            min_out_[i] = (m == std::numeric_limits<int>::max()) ? 0 : m;
+                if (i != j) best = std::min(best, d_[i][j]);
+            cheapest_[i] = (best == std::numeric_limits<int>::max()) ? 0 : best;
         }
     }
 
     TourResult solve(int depot = 0) {
+        best_cost_ = std::numeric_limits<int>::max();
+        visited_.assign(n_, false);
         path_.clear();
-        path_.push_back(depot);
+        result_ = TourResult{};
+
         visited_[depot] = true;
-        recurse(depot, 0, 1);
-        TourResult r;
-        r.cost = best_;
-        r.order = best_path_;
-        r.nodes_explored = explored_;
-        r.nodes_pruned   = pruned_;
-        return r;
+        path_.push_back(depot);
+        recurse(depot, depot, 1, 0);
+
+        result_.cost  = best_cost_;
+        result_.order = best_order_;
+        return result_;
     }
 
 private:
-    const std::vector<std::vector<int>>& d_;
-    int n_;
-    std::vector<bool> visited_;
-    std::vector<int>  path_, best_path_, min_out_;
-    int    best_;
-    size_t explored_ = 0, pruned_ = 0;
-
     // Lower bound on any completion of the current partial tour.
-    int bound(int so_far) const {
-        int b = so_far;
+    int bound(int cost_so_far) const {
+        int b = cost_so_far;
         for (int i = 0; i < n_; ++i)
-            if (!visited_[i]) b += min_out_[i];
+            if (!visited_[i]) b += cheapest_[i];
         return b;
     }
 
-    void recurse(int city, int so_far, int depth) {
-        ++explored_;
+    void recurse(int depot, int at, int depth, int cost_so_far) {
+        ++result_.nodes_explored;
 
         if (depth == n_) {                              // tour complete, close it
-            int total = so_far + d_[city][path_[0]];
-            if (total < best_) { best_ = total; best_path_ = path_; }
+            const int total = cost_so_far + d_[at][depot];
+            if (total < best_cost_) { best_cost_ = total; best_order_ = path_; }
             return;
         }
 
         for (int next = 0; next < n_; ++next) {
             if (visited_[next]) continue;
-            int cost = so_far + d_[city][next];
+            const int step = cost_so_far + d_[at][next];
 
             visited_[next] = true;
             path_.push_back(next);
 
-            // THE PRUNE. Without this line the search is plain backtracking
-            // and explores every one of the (n-1)! permutations.
-            if (bound(cost) < best_) {
-                recurse(next, cost, depth + 1);
+            // THE PRUNE. Without this line the search is plain backtracking.
+            if (bound(step) < best_cost_) {
+                recurse(depot, next, depth + 1, step);
             } else {
-                ++pruned_;
+                ++result_.nodes_pruned;
             }
 
             path_.pop_back();
             visited_[next] = false;
         }
     }
+
+    const std::vector<std::vector<int>>& d_;
+    int n_;
+    std::vector<int> cheapest_, path_, best_order_;
+    std::vector<bool> visited_;
+    int best_cost_ = 0;
+    TourResult result_;
 };
 
 // Plain backtracking, no bound. Kept to measure what the bound is worth.
 class BacktrackingTSP {
 public:
     explicit BacktrackingTSP(const std::vector<std::vector<int>>& d)
-        : d_(d), n_(static_cast<int>(d.size())),
-          visited_(d.size(), false), best_(std::numeric_limits<int>::max()) {}
+        : d_(d), n_(static_cast<int>(d.size())) {}
 
     TourResult solve(int depot = 0) {
+        best_cost_ = std::numeric_limits<int>::max();
+        visited_.assign(n_, false);
         path_.clear();
-        path_.push_back(depot);
+        result_ = TourResult{};
+
         visited_[depot] = true;
-        recurse(depot, 0, 1);
-        TourResult r;
-        r.cost = best_;
-        r.order = best_path_;
-        r.nodes_explored = explored_;
-        r.nodes_pruned   = 0;
-        return r;
+        path_.push_back(depot);
+        recurse(depot, depot, 1, 0);
+
+        result_.cost  = best_cost_;
+        result_.order = best_order_;
+        return result_;
     }
 
 private:
-    const std::vector<std::vector<int>>& d_;
-    int n_;
-    std::vector<bool> visited_;
-    std::vector<int>  path_, best_path_;
-    int    best_;
-    size_t explored_ = 0;
-
-    void recurse(int city, int so_far, int depth) {
-        ++explored_;
+    void recurse(int depot, int at, int depth, int cost_so_far) {
+        ++result_.nodes_explored;
         if (depth == n_) {
-            int total = so_far + d_[city][path_[0]];
-            if (total < best_) { best_ = total; best_path_ = path_; }
+            const int total = cost_so_far + d_[at][depot];
+            if (total < best_cost_) { best_cost_ = total; best_order_ = path_; }
             return;
         }
         for (int next = 0; next < n_; ++next) {
             if (visited_[next]) continue;
             visited_[next] = true;
             path_.push_back(next);
-            recurse(next, so_far + d_[city][next], depth + 1);
+            recurse(depot, next, depth + 1, cost_so_far + d_[at][next]);
             path_.pop_back();
             visited_[next] = false;
         }
     }
+
+    const std::vector<std::vector<int>>& d_;
+    int n_;
+    std::vector<int> path_, best_order_;
+    std::vector<bool> visited_;
+    int best_cost_ = 0;
+    TourResult result_;
 };

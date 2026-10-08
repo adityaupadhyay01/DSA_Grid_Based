@@ -1,0 +1,24 @@
+Test 1: empty 10x10 grid, corner to corner
+  [PASS] path found
+  [PASS] cost is 9 diagonal steps (12726)
+       cost=12726 expansions=10
+
+Test 2: all three structures agree on 50 random maps
+  [PASS] all three agree on reachability
+  [PASS] all three return the same optimal cost
+
+Test 3: obstacles are respected
+  [PASS] no path through a solid wall
+
+Test 4: wall with a gap is routed around
+  [PASS] path found through the gap
+  [PASS] path contains no blocked cell
+
+Test 5: heap invariant holds under mixed operations
+  [PASS] extract-min returns 7,8,9,11,12,14 in order
+
+Test 6: bucket queue matches heap ordering
+  [PASS] identical optimal cost
+       heap: cost=41592 exp=62 | bucket: cost=41592 exp=32  (tie-breaking differs by 48%)
+
+ALL TESTS PASSED (0 failures)
