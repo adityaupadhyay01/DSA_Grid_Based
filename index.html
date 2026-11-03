@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Drone Path Planning — Demo</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eff2f5; --card:#ffffff; --ink:#15212c; --soft:#5f7281;
+  --line:#ccd6de; --line2:#e4eaef;
+  --pick:#17627c;
+  --free:#ffffff; --seen:#cfe3ec; --front:#64b0c8;
+  --bldg:#5d7083; --bldg-roof:#3f4f5e; --bldg-win:#aebcc7;
+  --grass:#dcebd4; --tree:#4a8a4e; --tree-dark:#2f6a38; --trunk:#7a5733;
+  --water:#9cc6e4; --water-line:#5e9bc6;
+  --rack:#b08647; --rack-line:#7d5c2b;
+  --block:#6b6f76; --block-line:#43474d;
+  --route:#d2541c; --start:#1b7a4a; --end:#b3246b; --bad:#a62f3a;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0d141a; --card:#141e27; --ink:#e3ecf2; --soft:#8b9dab;
+  --line:#26333d; --line2:#1c2831;
+  --pick:#4db3cf;
+  --free:#0f1a23; --seen:#27485b; --front:#48a3bf;
+  --bldg:#6b7f93; --bldg-roof:#8ea0b2; --bldg-win:#3b4a58;
+  --grass:#1e3324; --tree:#4f9a56; --tree-dark:#79c47f; --trunk:#8a6540;
+  --water:#2a5f87; --water-line:#6fb2dd;
+  --rack:#9a7439; --rack-line:#d8ab5e;
+  --block:#7b818a; --block-line:#aeb5bd;
+  --route:#ff7a44; --start:#4cb882; --end:#e86aa6; --bad:#e2707a;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0d141a; --card:#141e27; --ink:#e3ecf2; --soft:#8b9dab;
+  --line:#26333d; --line2:#1c2831;
+  --pick:#4db3cf;
+  --free:#0f1a23; --seen:#27485b; --front:#48a3bf;
+  --bldg:#6b7f93; --bldg-roof:#8ea0b2; --bldg-win:#3b4a58;
+  --grass:#1e3324; --tree:#4f9a56; --tree-dark:#79c47f; --trunk:#8a6540;
+  --water:#2a5f87; --water-line:#6fb2dd;
+  --rack:#9a7439; --rack-line:#d8ab5e;
+  --block:#7b818a; --block-line:#aeb5bd;
+  --route:#ff7a44; --start:#4cb882; --end:#e86aa6; --bad:#e2707a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:920px;margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:22px 34px}
+h1{margin:0;font-size:clamp(22px,3.6vw,30px);font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--soft);margin-top:4px}
+header{border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:20px}
+.goal{margin:10px 0 0;font-size:17px;max-width:70ch}
+.goal b{color:var(--pick)}
+
+.step{background:var(--card);border:1px solid var(--line);padding:13px 16px;margin-bottom:12px}
+.step[hidden]{display:none}
+.step h2{margin:0 0 9px;font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--soft);font-family:"IBM Plex Mono",monospace}
+.step h2 i{font-style:normal;color:var(--pick)}
+.step p.note{margin:0 0 10px;font-size:14.5px;color:var(--soft);max-width:72ch}
+.opts{display:flex;flex-wrap:wrap;gap:9px}
+.opt{font-family:"IBM Plex Sans",sans-serif;font-size:15px;font-weight:500;padding:10px 16px;
+  border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;border-radius:0;
+  display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:118px;text-align:left}
+.opt small{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--soft);font-weight:400}
+.opt:hover{border-color:var(--pick)}
+.opt[aria-pressed="true"]{border-color:var(--pick);background:var(--pick);color:#fff}
+.opt[aria-pressed="true"] small{color:#fff;opacity:.85}
+.opt:focus-visible{outline:3px solid var(--pick);outline-offset:2px}
+
+/* ---- the map editor ---- */
+.tools{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end}
+.tool{display:flex;align-items:center;gap:8px;font-family:"IBM Plex Sans",sans-serif;font-size:14.5px;
+  font-weight:500;padding:8px 13px;border:2px solid var(--line);background:var(--card);
+  color:var(--ink);cursor:pointer;border-radius:0}
+.tool canvas{width:18px;height:18px;display:block;border:1px solid var(--line2);flex:none}
+.tool i.dot{width:14px;height:14px;border-radius:50%;flex:none;border:1px solid var(--line2)}
+.tool:hover{border-color:var(--pick)}
+.tool[aria-pressed="true"]{border-color:var(--pick);box-shadow:inset 0 0 0 2px var(--pick)}
+.tool:focus-visible{outline:3px solid var(--pick);outline-offset:2px}
+.toolgroup{display:flex;flex-direction:column;gap:5px}
+.toolgroup label{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--soft)}
+.brush{display:inline-flex;border:2px solid var(--line)}
+.brush button{font-family:"IBM Plex Mono",monospace;font-size:13px;padding:7px 13px;border:0;
+  border-right:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.brush button:last-child{border-right:0}
+.brush button[aria-pressed="true"]{background:var(--pick);color:#fff}
+.minor{font-family:"IBM Plex Sans",sans-serif;font-size:14px;font-weight:500;padding:8px 14px;
+  border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;border-radius:0}
+.minor:hover{border-color:var(--bad);color:var(--bad)}
+
+.goRow{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+#go{font-family:"IBM Plex Sans",sans-serif;font-size:18px;font-weight:600;padding:13px 28px;
+  border:2px solid var(--route);background:var(--route);color:#fff;cursor:pointer;border-radius:0}
+#go:hover:not(:disabled){filter:brightness(1.08)}
+#go:disabled{opacity:.45;cursor:default}
+#go:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.hint{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--soft)}
+.hint.bad{color:var(--bad)}
+
+.mapcard{background:var(--card);border:1px solid var(--line)}
+.mapbar{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;align-items:center;
+  padding:9px 14px;border-bottom:1px solid var(--line);
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--soft)}
+.cvwrap{width:min(72vh,780px,100%);aspect-ratio:1;margin:14px auto}
+canvas#cv{display:block;width:100%;height:100%;background:var(--free);touch-action:none}
+canvas#cv.editing{cursor:crosshair}
+.key{display:flex;flex-wrap:wrap;gap:8px 18px;padding:11px 14px;border-top:1px solid var(--line);
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--soft)}
+.key span{display:inline-flex;align-items:center;gap:7px}
+.key canvas{width:20px;height:20px;flex:none;border:1px solid var(--line2);display:block}
+.key i.sw{width:14px;height:14px;border:1px solid var(--line2);flex:none}
+
+.scrim{position:fixed;inset:0;background:rgba(10,18,24,.62);display:flex;align-items:center;
+  justify-content:center;padding:18px;z-index:40}
+.scrim[hidden]{display:none}
+.modal{background:var(--card);border:2px solid var(--ink);max-width:620px;width:100%;
+  max-height:88vh;overflow:auto}
+.modal header{border:0;border-bottom:2px solid var(--ink);padding:16px 20px;margin:0;
+  background:var(--ink);color:var(--bg)}
+.modal header h3{margin:0;font-size:19px;font-weight:700}
+.modal header p{margin:3px 0 0;font-family:"IBM Plex Mono",monospace;font-size:12.5px;opacity:.85}
+.modal .body{padding:18px 20px 20px}
+ol.algos{margin:0;padding:0;list-style:none;counter-reset:a}
+ol.algos li{counter-increment:a;display:grid;grid-template-columns:30px 1fr;gap:13px;
+  padding:11px 0;border-bottom:1px solid var(--line2)}
+ol.algos li:last-child{border-bottom:0}
+ol.algos li::before{content:counter(a);font-family:"IBM Plex Mono",monospace;font-weight:600;
+  font-size:13px;color:#fff;background:var(--pick);width:26px;height:26px;display:flex;
+  align-items:center;justify-content:center}
+.an{font-weight:600;font-size:16.5px}
+.au{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--pick);
+  letter-spacing:.05em;text-transform:uppercase}
+.ad{font-size:14.5px;color:var(--soft);margin-top:2px}
+.ad b{color:var(--ink);font-weight:600}
+.sum{margin-top:16px;border-top:2px solid var(--ink);padding-top:13px;
+  display:grid;grid-template-columns:1fr auto;gap:3px 14px;
+  font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-variant-numeric:tabular-nums}
+.sum dt{color:var(--soft)} .sum dd{margin:0;text-align:right;font-weight:600}
+.verdict{margin-top:14px;background:var(--seen);padding:11px 13px;font-size:14.5px;color:var(--ink)}
+.close{margin-top:16px;width:100%;font-size:16px;font-weight:600;padding:12px;
+  border:2px solid var(--ink);background:var(--card);color:var(--ink);cursor:pointer}
+.close:hover{background:var(--ink);color:var(--bg)}
+footer.f{margin-top:18px;border-top:1px solid var(--line);padding-top:11px;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Drone Path Planning — what the drone does, step by step</h1>
+  <div class="tag">Aditya Upadhyay · 2501330100038 · B.Tech CSE-A Sem III · DSA II (CCSE0301) · NIET Greater Noida</div>
+  <p class="goal">Pick a <b>map</b>, pick where the drone <b>starts</b>, pick where it must
+  <b>deliver</b> — or draw your own map and place the two points yourself. The drone cannot fly
+  through buildings, trees, water, racks or blocked zones. The program finds the shortest safe
+  route, and then shows exactly which algorithms and data structures it used.</p>
+</header>
+
+<div class="step">
+  <h2><i>Step 1</i> &nbsp;Choose a map</h2>
+  <div class="opts" id="mapOpts"></div>
+</div>
+
+<div class="step" id="startStep">
+  <h2><i>Step 2</i> &nbsp;Choose the starting point</h2>
+  <div class="opts" id="startOpts"></div>
+</div>
+
+<div class="step" id="endStep">
+  <h2><i>Step 3</i> &nbsp;Choose the delivery point</h2>
+  <div class="opts" id="endOpts"></div>
+</div>
+
+<div class="step" id="editStep" hidden>
+  <h2><i>Step 2</i> &nbsp;Draw your own map</h2>
+  <p class="note">Pick a tool, then drag across the grid below to paint. Place the start and the
+  delivery point anywhere, then press <b>Find the shortest route</b>. The map is kept in this
+  browser, so it survives a reload.</p>
+  <div class="tools" id="tools"></div>
+  <div class="tools" style="margin-top:11px">
+    <div class="toolgroup">
+      <label for="brush">brush size</label>
+      <div class="brush" id="brush">
+        <button type="button" data-b="1" aria-pressed="true">1</button>
+        <button type="button" data-b="2" aria-pressed="false">2</button>
+        <button type="button" data-b="4" aria-pressed="false">4</button>
+        <button type="button" data-b="8" aria-pressed="false">8</button>
+      </div>
+    </div>
+    <div class="toolgroup">
+      <label>map</label>
+      <div style="display:flex;gap:9px">
+        <button type="button" class="minor" id="clearMap">Clear everything</button>
+        <button type="button" class="minor" id="townMap">Start from a town</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="goRow">
+  <button id="go">Find the shortest route</button>
+  <span class="hint" id="hint">Ready.</span>
+</div>
+
+<div class="mapcard">
+  <div class="mapbar">
+    <span id="mapName">City blocks</span>
+    <span id="status">Waiting to start</span>
+  </div>
+  <div class="cvwrap"><canvas id="cv" width="780" height="780"
+    aria-label="Map showing buildings, trees, water, the drone's starting point, the delivery point and the route"></canvas></div>
+  <div class="key" id="key"></div>
+</div>
+
+<footer class="f">Distances are whole numbers — a straight step costs 1000, a diagonal step 1414.
+Nothing here is a recording: the route is computed in the browser each time you press the button.</footer>
+</div>
+
+<div class="scrim" id="scrim" hidden role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="modal">
+    <header>
+      <h3 id="dTitle">How the drone got there</h3>
+      <p id="dSub"></p>
+    </header>
+    <div class="body">
+      <ol class="algos" id="dList"></ol>
+      <dl class="sum" id="dSum"></dl>
+      <div class="verdict" id="dVerdict"></div>
+      <button class="close" id="dClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const STRAIGHT=1000, DIAG=1414;
+
+/* The grid side length changes with the map: the three fixed maps are 40x40,
+   the one you draw yourself is 100x100. Everything below reads N at call time,
+   so it must be set before a map's cells are built. */
+let N=40;
+
+/* what is in a cell */
+const FREE=0, BLDG=1, TREE=2, WATER=3, RACK=4, BLOCK=5;
+const KIND={
+  [BLDG] :{label:"building"},
+  [TREE] :{label:"tree"},
+  [WATER]:{label:"water"},
+  [RACK] :{label:"warehouse rack"},
+  [BLOCK]:{label:"blocked zone"}
+};
+
+const I=(x,y)=>y*N+x;
+function blank(){return new Uint8Array(N*N);}
+function rect(c,x0,y0,w,h,kind){
+  for(let y=Math.max(0,y0);y<Math.min(N,y0+h);y++)
+    for(let x=Math.max(0,x0);x<Math.min(N,x0+w);x++) c[I(x,y)]=kind;
+}
+function clearRect(c,x0,y0,w,h){rect(c,x0,y0,w,h,FREE);}
+
+/* ============================ the maps ============================
+   The three fixed maps are built at 40x40. Their start and end indices are
+   worked out once, here, while N is still 40 — do not move these.
+   ================================================================= */
+const MAPS=[
+  {
+    id:"city", size:40, name:"City blocks", blurb:"buildings, streets, a park",
+    build(){
+      const c=blank();
+      for(let by=0;by<5;by++)for(let bx=0;bx<5;bx++){
+        const x=2+bx*8, y=2+by*8;
+        if((bx*3+by)%5===2){
+          // a park: trees in a loose pattern, so the drone can weave between them
+          for(let j=0;j<5;j++)for(let i=0;i<5;i++)
+            if((i+j)%2===0) c[I(x+i,y+j)]=TREE;
+        } else rect(c,x,y,5,5,BLDG);
+      }
+      // a line of street trees down one avenue
+      for(let y=3;y<N;y+=4) c[I(16,y)]=TREE;
+      return c;
+    },
+    starts:[{name:"Depot North",at:0*40+0},{name:"Depot East",at:1*40+39},{name:"Depot South",at:39*40+1}],
+    ends:[{name:"Hospital",at:39*40+39},{name:"School",at:8*40+24},{name:"Market",at:24*40+8}]
+  },
+  {
+    id:"warehouse", size:40, name:"Warehouse", blurb:"racks with narrow gaps",
+    build(){
+      const c=blank();
+      for(let i=0;i<6;i++){
+        const x=5+i*6;
+        rect(c,x,2,2,36,RACK);
+        clearRect(c,x,(i%2===0)?5:30,2,5);   // one opening per rack, alternating ends
+      }
+      rect(c,20,18,2,2,BLDG); rect(c,32,26,2,2,BLDG);   // support pillars
+      return c;
+    },
+    starts:[{name:"Dock A",at:20*40+1},{name:"Dock B",at:3*40+1},{name:"Dock C",at:37*40+1}],
+    ends:[{name:"Bay 1",at:20*40+38},{name:"Bay 2",at:3*40+38},{name:"Bay 3",at:37*40+38}]
+  },
+  {
+    id:"river", size:40, name:"River crossing", blurb:"water, forest, two bridges",
+    build(){
+      const c=blank();
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+        const d=x+y-39;
+        if(d>=-1&&d<=1) c[I(x,y)]=WATER;
+      }
+      clearRect(c,8,27,5,6); clearRect(c,27,8,6,5);      // the two bridges
+      // forest on both banks
+      const forest=[[14,4,5,5],[4,14,5,6],[30,28,6,5],[22,30,5,4],[33,18,4,5]];
+      for(const [x,y,w,h] of forest)
+        for(let j=0;j<h;j++)for(let i=0;i<w;i++)
+          if((i*3+j*5)%4!==0) c[I(x+i,y+j)]=TREE;
+      rect(c,24,22,3,3,BLDG); rect(c,9,8,3,3,BLDG);      // two buildings
+      return c;
+    },
+    starts:[{name:"North Pad",at:3*40+3},{name:"East Pad",at:1*40+36},{name:"West Pad",at:30*40+1}],
+    ends:[{name:"South Site",at:36*40+36},{name:"Hill Site",at:37*40+20},{name:"Ridge Site",at:15*40+37}]
+  },
+  {
+    id:"custom", size:100, custom:true, name:"Custom map", blurb:"draw it yourself · 100 × 100",
+    build(){ return customCells(); },
+    // One entry each, mutated as the start and delivery points are moved.
+    starts:[{name:"Start",at:3*100+3}],
+    ends:[{name:"Delivery",at:96*100+96}]
+  }
+];
+
+/* ============================ the drawn map ============================
+   Kept in localStorage so a reload does not throw away a map someone has just
+   spent two minutes drawing. Every access is guarded: storage can be absent,
+   full, or disabled, and none of those should stop the page working.
+   ====================================================================== */
+const CUSTOM_SIZE=100, SAVE_KEY="drone-planner-custom-v1";
+let customGrid=null;
+
+function customCells(){
+  if(!customGrid){
+    customGrid=loadCustom();
+    if(!customGrid) customGrid=new Uint8Array(CUSTOM_SIZE*CUSTOM_SIZE);
+  }
+  return customGrid;
+}
+function loadCustom(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw) return null;
+    const saved=JSON.parse(raw);
+    if(!saved || saved.size!==CUSTOM_SIZE || typeof saved.cells!=="string") return null;
+    if(saved.cells.length!==CUSTOM_SIZE*CUSTOM_SIZE) return null;
+    const g=new Uint8Array(CUSTOM_SIZE*CUSTOM_SIZE);
+    for(let i=0;i<g.length;i++){
+      const k=saved.cells.charCodeAt(i)-48;
+      g[i]=(k>=0&&k<=5)?k:0;
+    }
+    const map=MAPS[3];
+    if(Number.isInteger(saved.start)&&saved.start>=0&&saved.start<g.length) map.starts[0].at=saved.start;
+    if(Number.isInteger(saved.end)&&saved.end>=0&&saved.end<g.length) map.ends[0].at=saved.end;
+    return g;
+  }catch(e){ return null; }
+}
+function saveCustom(){
+  try{
+    if(!customGrid) return;
+    let s="";
+    for(let i=0;i<customGrid.length;i++) s+=String.fromCharCode(48+customGrid[i]);
+    localStorage.setItem(SAVE_KEY,JSON.stringify({
+      size:CUSTOM_SIZE, cells:s,
+      start:MAPS[3].starts[0].at, end:MAPS[3].ends[0].at
+    }));
+  }catch(e){ /* private window, quota, blocked storage — the map still works */ }
+}
+
+/** A starting point someone can edit rather than a blank 10,000-cell grid. */
+function townLayout(){
+  const g=new Uint8Array(CUSTOM_SIZE*CUSTOM_SIZE);
+  const idx=(x,y)=>y*CUSTOM_SIZE+x;
+  const put=(x0,y0,w,h,k)=>{
+    for(let y=Math.max(0,y0);y<Math.min(CUSTOM_SIZE,y0+h);y++)
+      for(let x=Math.max(0,x0);x<Math.min(CUSTOM_SIZE,x0+w);x++) g[idx(x,y)]=k;
+  };
+  for(let by=0;by<6;by++)for(let bx=0;bx<6;bx++){
+    const x=6+bx*15, y=6+by*15;
+    if((bx+by)%4===3){
+      for(let j=0;j<9;j++)for(let i=0;i<9;i++) if((i+j)%2===0) g[idx(x+i,y+j)]=TREE;
+    } else put(x,y,9,9,BLDG);
+  }
+  put(0,49,100,2,BLOCK);          // a wall across the middle
+  put(30,49,8,2,FREE);            // with two gaps in it
+  put(72,49,8,2,FREE);
+  return g;
+}
+
+/* ============================ A* ============================ */
+class MinHeap{
+  constructor(){this.v=[];this.k=[];this.peak=0;}
+  get size(){return this.v.length;}
+  _s(i,j){const a=this.k[i];this.k[i]=this.k[j];this.k[j]=a;
+          const b=this.v[i];this.v[i]=this.v[j];this.v[j]=b;}
+  insert(v,key){this.v.push(v);this.k.push(key);let i=this.k.length-1;
+    while(i>0){const p=(i-1)>>1;if(this.k[p]<=this.k[i])break;this._s(i,p);i=p;}
+    if(this.v.length>this.peak)this.peak=this.v.length;}
+  extractMin(){const out=this.v[0];const lk=this.k.pop(),lv=this.v.pop(),n=this.k.length;
+    if(n){this.k[0]=lk;this.v[0]=lv;let i=0;
+      for(;;){let c=2*i+1;if(c>=n)break;
+        if(c+1<n&&this.k[c+1]<this.k[c])c++;
+        if(this.k[i]<=this.k[c])break;this._s(i,c);i=c;}}
+    return out;}
+}
+function h(a,b){
+  const ax=a%N, ay=(a/N)|0, bx=b%N, by=(b/N)|0;
+  const dx=Math.abs(ax-bx), dy=Math.abs(ay-by), mn=Math.min(dx,dy);
+  return DIAG*mn + STRAIGHT*(Math.max(dx,dy)-mn);
+}
+function* astar(cells,s,t){
+  const n=N*N, INF=0x7fffffff;
+  const g=new Int32Array(n).fill(INF), par=new Int32Array(n).fill(-1);
+  const closed=new Uint8Array(n), inOpen=new Uint8Array(n), open=new MinHeap();
+  let exp=0, ins=0, ext=0, stale=0, found=false;
+  if(cells[s]!==FREE||cells[t]!==FREE)
+    return {found,closed,inOpen,exp,ins,ext,stale,peak:0,cost:0,path:[]};
+  g[s]=0; open.insert(s,h(s,t)); ins++; inOpen[s]=1;
+  while(open.size){
+    const u=open.extractMin(); ext++;
+    if(closed[u]){stale++;continue;}
+    closed[u]=1; inOpen[u]=0; exp++;
+    if(u===t){found=true;break;}
+    const ux=u%N, uy=(u/N)|0;
+    for(let dy=-1;dy<=1;dy++){
+      const vy=uy+dy; if(vy<0||vy>=N)continue;
+      for(let dx=-1;dx<=1;dx++){
+        if(!dx&&!dy)continue;
+        const vx=ux+dx; if(vx<0||vx>=N)continue;
+        const v=vy*N+vx;
+        if(cells[v]!==FREE||closed[v])continue;
+        const ng=g[u]+((dx&&dy)?DIAG:STRAIGHT);
+        if(ng<g[v]){g[v]=ng;par[v]=u;open.insert(v,ng+h(v,t));ins++;inOpen[v]=1;}
+      }
+    }
+    yield {closed,inOpen,exp};
+  }
+  const path=[];
+  if(found)for(let c=t;c!==-1;c=par[c])path.push(c);
+  path.reverse();
+  return {found,closed,inOpen,exp,ins,ext,stale,peak:open.peak,cost:found?g[t]:0,path};
+}
+
+/* ============================ drawing the world ============================ */
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const $=i=>document.getElementById(i);
+const C=k=>getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+
+/* each obstacle kind draws itself, so the legend and the map always agree */
+function paintCell(g,kind,x,y,s){
+  if(kind===BLDG){
+    g.fillStyle=C('--bldg'); g.fillRect(x,y,s,s);
+    g.fillStyle=C('--bldg-roof'); g.fillRect(x,y,s,Math.max(1.5,s*.2));
+    if(s>=9){
+      g.fillStyle=C('--bldg-win');
+      const w=s*.22, gap=s*.26;
+      for(let r=0;r<2;r++)for(let c2=0;c2<2;c2++)
+        g.fillRect(x+gap+c2*(w+gap*.7), y+s*.34+r*(w+gap*.45), w, w);
+    }
+  } else if(kind===TREE){
+    g.fillStyle=C('--grass'); g.fillRect(x,y,s,s);
+    g.fillStyle=C('--trunk');
+    g.fillRect(x+s*.44,y+s*.58,Math.max(1.2,s*.13),s*.3);
+    g.fillStyle=C('--tree');
+    g.beginPath(); g.arc(x+s*.5,y+s*.44,s*.33,0,6.2832); g.fill();
+    g.fillStyle=C('--tree-dark');
+    g.beginPath(); g.arc(x+s*.62,y+s*.36,s*.15,0,6.2832); g.fill();
+  } else if(kind===WATER){
+    g.fillStyle=C('--water'); g.fillRect(x,y,s,s);
+    if(s>=7){
+      g.strokeStyle=C('--water-line'); g.lineWidth=Math.max(1,s*.09);
+      g.beginPath();
+      g.moveTo(x+s*.12,y+s*.42); g.quadraticCurveTo(x+s*.34,y+s*.26,x+s*.56,y+s*.42);
+      g.moveTo(x+s*.3,y+s*.72);  g.quadraticCurveTo(x+s*.52,y+s*.56,x+s*.74,y+s*.72);
+      g.stroke();
+    }
+  } else if(kind===RACK){
+    g.fillStyle=C('--rack'); g.fillRect(x,y,s,s);
+    g.strokeStyle=C('--rack-line'); g.lineWidth=Math.max(1,s*.1);
+    g.beginPath();
+    for(let k=1;k<=2;k++){const yy=y+s*k/3; g.moveTo(x,yy); g.lineTo(x+s,yy);}
+    g.stroke();
+  } else if(kind===BLOCK){
+    g.fillStyle=C('--block'); g.fillRect(x,y,s,s);
+    g.strokeStyle=C('--block-line'); g.lineWidth=Math.max(1,s*.11);
+    g.beginPath();                       // a hatch, so it reads as concrete
+    g.moveTo(x,y+s); g.lineTo(x+s,y);
+    g.moveTo(x,y+s*.5); g.lineTo(x+s*.5,y);
+    g.moveTo(x+s*.5,y+s); g.lineTo(x+s,y+s*.5);
+    g.stroke();
+  } else {
+    g.fillStyle=C('--free'); g.fillRect(x,y,s,s);
+  }
+}
+
+let mapIx=0, startIx=0, endIx=0, view={closed:null,inOpen:null,path:null}, busy=false, lastRun=null;
+const cur=()=>MAPS[mapIx];
+const isCustom=()=>!!cur().custom;
+let cells;
+
+/* ---------------------------------------------------------------------------
+   Two offscreen layers.
+
+   The terrain is expensive: at 100x100 it is 10,000 cells, several of them
+   arcs and strokes. Redrawing it on every animation frame, or on every
+   mouse-move while painting, is what makes a canvas feel broken. So it is
+   drawn once per map and then only the cells that actually change are
+   repainted into it.
+
+   The search layer is one pixel per cell, scaled up with smoothing off. That
+   turns "tint 7,000 explored cells" into a single drawImage.
+   --------------------------------------------------------------------------- */
+const terrain=document.createElement('canvas');
+const tctx=terrain.getContext('2d');
+const search=document.createElement('canvas');
+const sctx=search.getContext('2d');
+let terrainValid=false;
+
+function cellSize(){ return cv.width/N; }
+
+function fitCanvas(){
+  const r=cv.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1);
+  const px=Math.max(320,Math.round(r.width*dpr));
+  if(cv.width!==px){ cv.width=px; cv.height=px; terrainValid=false; }
+}
+
+function rebuildTerrain(){
+  const px=cv.width, s=cellSize();
+  terrain.width=px; terrain.height=px;
+  tctx.clearRect(0,0,px,px);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    paintCell(tctx,cells[I(x,y)],Math.floor(x*s),Math.floor(y*s),Math.ceil(s));
+  }
+  // The grid lines go on once, with the terrain, rather than every frame.
+  tctx.strokeStyle=C('--line2'); tctx.lineWidth=1; tctx.globalAlpha=.55;
+  tctx.beginPath();
+  const step = N<=60 ? 1 : 5;          // at 100x100 every line would be a smear
+  for(let k=0;k<=N;k+=step){const o=Math.round(k*s)+0.5;
+    tctx.moveTo(o,0);tctx.lineTo(o,px);tctx.moveTo(0,o);tctx.lineTo(px,o);}
+  tctx.stroke(); tctx.globalAlpha=1;
+  terrainValid=true;
+}
+
+/** Repaints one cell into the terrain layer — what painting uses. */
+function refreshTerrainCell(i){
+  if(!terrainValid) return;
+  const s=cellSize(), x=i%N, y=(i/N)|0;
+  const X=Math.floor(x*s), Y=Math.floor(y*s), S=Math.ceil(s);
+  paintCell(tctx,cells[i],X,Y,S);
+  if(N<=60){
+    tctx.strokeStyle=C('--line2'); tctx.lineWidth=1; tctx.globalAlpha=.55;
+    tctx.strokeRect(Math.round(X)+0.5,Math.round(Y)+0.5,S,S);
+    tctx.globalAlpha=1;
+  }
+}
+
+function rgb(hex){
+  const s=hex.replace('#','');
+  const f=s.length===3?s.split('').map(c=>c+c).join(''):s;
+  return [parseInt(f.slice(0,2),16),parseInt(f.slice(2,4),16),parseInt(f.slice(4,6),16)];
+}
+
+function drawSearchLayer(){
+  search.width=N; search.height=N;
+  const img=sctx.createImageData(N,N), d=img.data;
+  if(view.closed||view.inOpen){
+    const cl=rgb(C('--seen')), op=rgb(C('--front'));
+    for(let i=0;i<N*N;i++){
+      const c = view.inOpen&&view.inOpen[i] ? op : (view.closed&&view.closed[i] ? cl : null);
+      if(!c) continue;
+      const p=i*4; d[p]=c[0]; d[p+1]=c[1]; d[p+2]=c[2]; d[p+3]=255;
+    }
+  }
+  sctx.putImageData(img,0,0);
+}
+
+function draw(){
+  fitCanvas();
+  if(!terrainValid) rebuildTerrain();
+  const px=cv.width, s=cellSize();
+
+  ctx.clearRect(0,0,px,px);
+  ctx.drawImage(terrain,0,0);
+
+  if(view.closed||view.inOpen){
+    drawSearchLayer();
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(search,0,0,px,px);
+  }
+
+  const cx=i=>((i%N)+0.5)*s, cy=i=>(((i/N)|0)+0.5)*s;
+  if(view.path&&view.path.length>1){
+    ctx.strokeStyle=C('--route');ctx.lineWidth=Math.max(2.5,s*.46);
+    ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cx(view.path[0]),cy(view.path[0]));
+    for(let i=1;i<view.path.length;i++)ctx.lineTo(cx(view.path[i]),cy(view.path[i]));
+    ctx.stroke();
+  }
+  const pin=(i,color,label)=>{
+    const rr=Math.max(8,s*.92);
+    // nudge pins that sit on the very edge so the whole marker stays visible
+    const x=Math.min(px-rr-1,Math.max(rr+1,cx(i))), y=Math.min(px-rr-1,Math.max(rr+1,cy(i)));
+    ctx.beginPath();ctx.arc(x,y,rr,0,6.2832);
+    ctx.fillStyle=color;ctx.fill();
+    ctx.lineWidth=2.5;ctx.strokeStyle=C('--card');ctx.stroke();
+    const fs=Math.max(11,Math.min(18,s*.92));
+    ctx.font=`600 ${fs}px "IBM Plex Sans",sans-serif`;
+    const bw=ctx.measureText(label).width+12, bh=fs*1.5;
+    // flip the label below the pin when there is no room above it
+    const above = y-rr-6-bh >= 0;
+    const by = above ? y-rr-6-bh : y+rr+6;
+    const bx = Math.min(px-bw-2, Math.max(2, x-bw/2));
+    ctx.fillStyle=C('--card');ctx.fillRect(bx,by,bw,bh);
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=C('--ink');ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,bx+bw/2,by+bh/2+.5);
+  };
+  pin(cur().starts[startIx].at, C('--start'), cur().starts[startIx].name);
+  pin(cur().ends[endIx].at,     C('--end'),   cur().ends[endIx].name);
+}
+
+/* legend built from what is actually on this map, drawn with the same code */
+function buildKey(){
+  const present=[...new Set(Array.from(cells).filter(k=>k!==FREE))].sort();
+  const host=$('key'); host.innerHTML='';
+  for(const k of present){
+    const sp=document.createElement('span');
+    const c=document.createElement('canvas');
+    const dpr=Math.min(2,devicePixelRatio||1);
+    c.width=20*dpr;c.height=20*dpr;
+    paintCell(c.getContext('2d'),k,0,0,20*dpr);
+    sp.appendChild(c);
+    sp.appendChild(document.createTextNode(KIND[k].label));
+    host.appendChild(sp);
+  }
+  for(const [v,t] of [['--seen','cells the algorithm checked'],['--route','route chosen'],
+                      ['--start','start'],['--end','delivery point']]){
+    const sp=document.createElement('span');
+    sp.innerHTML=`<i class="sw" style="background:var(${v})"></i>${t}`;
+    host.appendChild(sp);
+  }
+}
+
+/* ============================ option buttons ============================ */
+function chips(host,items,sel,onPick,sub){
+  host.innerHTML='';
+  items.forEach((it,i)=>{
+    const b=document.createElement('button');
+    b.className='opt';b.type='button';
+    b.setAttribute('aria-pressed',String(i===sel));
+    b.innerHTML=`${it.name}<small>${sub?sub(it,i):''}</small>`;
+    b.addEventListener('click',()=>{if(!busy)onPick(i);});
+    host.appendChild(b);
+  });
+}
+
+function selectMap(i){
+  mapIx=i; startIx=0; endIx=0;
+  N=cur().size;                 // set before the cells are built: build() uses it
+  cells=cur().build();
+  terrainValid=false;
+  reset();
+}
+
+function refresh(){
+  chips($('mapOpts'),MAPS,mapIx,selectMap,m=>m.blurb);
+  const custom=isCustom();
+  $('startStep').hidden=custom;
+  $('endStep').hidden=custom;
+  $('editStep').hidden=!custom;
+  cv.classList.toggle('editing',custom);
+  if(!custom){
+    chips($('startOpts'),cur().starts,startIx,i=>{startIx=i;reset();});
+    chips($('endOpts'),cur().ends,endIx,i=>{endIx=i;reset();});
+  }
+  $('mapName').textContent=`${cur().name} · ${N} × ${N} cells`;
+}
+function reset(){
+  view={closed:null,inOpen:null,path:null};lastRun=null;
+  $('status').textContent='Waiting to start';
+  $('hint').textContent='Ready.';
+  $('hint').className='hint';
+  refresh();buildKey();draw();
+}
+
+/* ============================ the map editor ============================ */
+const TOOLS=[
+  {id:'bldg',  kind:BLDG,  label:'Building'},
+  {id:'tree',  kind:TREE,  label:'Tree'},
+  {id:'block', kind:BLOCK, label:'Block'},
+  {id:'erase', kind:FREE,  label:'Erase'},
+  {id:'start', point:'start', label:'Start point'},
+  {id:'end',   point:'end',   label:'Delivery point'}
+];
+let tool=TOOLS[0], brush=1, painting=false, lastCell=-1;
+
+function buildTools(){
+  const host=$('tools'); host.innerHTML='';
+  for(const t of TOOLS){
+    const b=document.createElement('button');
+    b.type='button'; b.className='tool';
+    b.setAttribute('aria-pressed',String(t===tool));
+    if(t.point){
+      const dot=document.createElement('i');
+      dot.className='dot';
+      dot.style.background=`var(--${t.point==='start'?'start':'end'})`;
+      b.appendChild(dot);
+    }else{
+      const c=document.createElement('canvas');
+      const dpr=Math.min(2,devicePixelRatio||1);
+      c.width=18*dpr; c.height=18*dpr;
+      paintCell(c.getContext('2d'),t.kind,0,0,18*dpr);
+      b.appendChild(c);
+    }
+    b.appendChild(document.createTextNode(t.label));
+    b.addEventListener('click',()=>{ tool=t; buildTools(); });
+    host.appendChild(b);
+  }
+}
+
+function cellFromEvent(e){
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)/r.width*N);
+  const y=Math.floor((e.clientY-r.top)/r.height*N);
+  if(x<0||y<0||x>=N||y>=N) return -1;
+  return y*N+x;
+}
+
+function applyTool(i){
+  if(i<0||!isCustom()) return;
+  const map=cur();
+
+  if(tool.point){
+    // Dropping a point onto an obstacle would make the search fail for a
+    // reason nobody can see, so clear the cell under it.
+    if(cells[i]!==FREE){ cells[i]=FREE; refreshTerrainCell(i); }
+    if(tool.point==='start'){
+      if(i===map.ends[0].at) return;      // the two points cannot share a cell
+      map.starts[0].at=i;
+    }else{
+      if(i===map.starts[0].at) return;
+      map.ends[0].at=i;
+    }
+  }else{
+    const x=i%N, y=(i/N)|0, r=brush-1;
+    const half=Math.floor(r/2);
+    for(let dy=-half;dy<=r-half;dy++){
+      for(let dx=-half;dx<=r-half;dx++){
+        const nx=x+dx, ny=y+dy;
+        if(nx<0||ny<0||nx>=N||ny>=N) continue;
+        const j=ny*N+nx;
+        // Never paint over the start or the delivery point.
+        if(j===map.starts[0].at||j===map.ends[0].at) continue;
+        if(cells[j]===tool.kind) continue;
+        cells[j]=tool.kind;
+        refreshTerrainCell(j);
+      }
+    }
+  }
+
+  // A drawn map invalidates whatever route was on screen.
+  view={closed:null,inOpen:null,path:null}; lastRun=null;
+  $('status').textContent='Waiting to start';
+  scheduleDraw();
+  scheduleSave();
+  scheduleKey();
+}
+
+/* One repaint per animation frame however many cells a stroke touched. */
+let drawPending=false;
+function scheduleDraw(){
+  if(drawPending) return;
+  drawPending=true;
+  requestAnimationFrame(()=>{ drawPending=false; draw(); });
+}
+
+let saveTimer=0, keyTimer=0;
+function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(saveCustom,400); }
+function scheduleKey(){ clearTimeout(keyTimer); keyTimer=setTimeout(buildKey,250); }
+
+/**
+ * Pointer events do not arrive once per cell: drag quickly and the cursor
+ * jumps ten cells between two events, which would leave a dotted line instead
+ * of a wall. So each move paints every cell on the segment from the previous
+ * position, by Bresenham.
+ */
+function paintLine(from,to){
+  if(from<0){ applyTool(to); return; }
+  let x0=from%N, y0=(from/N)|0;
+  const x1=to%N, y1=(to/N)|0;
+  const dx=Math.abs(x1-x0), sx=x0<x1?1:-1;
+  const dy=-Math.abs(y1-y0), sy=y0<y1?1:-1;
+  let err=dx+dy, guard=0;
+  for(;;){
+    applyTool(y0*N+x0);
+    if((x0===x1&&y0===y1)||++guard>4096) break;
+    const e2=2*err;
+    if(e2>=dy){ err+=dy; x0+=sx; }
+    if(e2<=dx){ err+=dx; y0+=sy; }
+  }
+}
+
+cv.addEventListener('pointerdown',e=>{
+  if(!isCustom()||busy) return;
+  painting=true; cv.setPointerCapture(e.pointerId);
+  lastCell=cellFromEvent(e);
+  applyTool(lastCell);
+});
+cv.addEventListener('pointermove',e=>{
+  if(!painting) return;
+  const c=cellFromEvent(e);
+  if(c<0||c===lastCell) return;
+  // Placing the start or the delivery point is a single drop, not a stroke.
+  if(tool.point) applyTool(c); else paintLine(lastCell,c);
+  lastCell=c;
+});
+cv.addEventListener('pointerup',()=>{ painting=false; lastCell=-1; saveCustom(); });
+cv.addEventListener('pointercancel',()=>{ painting=false; lastCell=-1; });
+
+$('brush').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  brush=Number(b.dataset.b);
+  for(const x of $('brush').querySelectorAll('button')) x.setAttribute('aria-pressed',String(x===b));
+});
+$('clearMap').addEventListener('click',()=>{
+  if(busy) return;
+  customGrid=new Uint8Array(CUSTOM_SIZE*CUSTOM_SIZE);
+  cells=customGrid; terrainValid=false;
+  saveCustom(); reset();
+});
+$('townMap').addEventListener('click',()=>{
+  if(busy) return;
+  customGrid=townLayout();
+  cells=customGrid; terrainValid=false;
+  MAPS[3].starts[0].at=3*CUSTOM_SIZE+3;
+  MAPS[3].ends[0].at=96*CUSTOM_SIZE+96;
+  saveCustom(); reset();
+});
+
+/* ============================ run ============================ */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function run(){
+  if(busy)return;
+  const s=cur().starts[startIx].at, t=cur().ends[endIx].at;
+
+  if(s===t){
+    $('hint').textContent='The start and the delivery point are the same cell.';
+    $('hint').className='hint bad';
+    return;
+  }
+
+  busy=true;$('go').disabled=true;
+  view={closed:null,inOpen:null,path:null};
+  $('status').textContent='A* is checking cells…';
+  $('hint').textContent='Searching for the shortest route.';
+  $('hint').className='hint';
+
+  // Time the algorithm on its own. The replay below is slowed down
+  // deliberately, and the pre-pass also tells us how fast to replay it.
+  const t0=performance.now();
+  let total=0;
+  { const q=astar(cells,s,t); let z=q.next();
+    while(!z.done){ total++; z=q.next(); } }
+  const ms=performance.now()-t0;
+
+  // Aim for roughly four seconds of animation whatever the map size: at
+  // 100x100 a search can close several thousand cells.
+  const batch=Math.max(1,Math.round(total/240));
+
+  const it=astar(cells,s,t);
+  let r=it.next(), frames=0;
+  while(!r.done){
+    view.closed=r.value.closed;view.inOpen=r.value.inOpen;
+    if(++frames%batch===0){
+      $('status').textContent=`A* is checking cells… ${r.value.exp} checked`;
+      draw();await sleep(16);
+    }
+    r=it.next();
+  }
+  const res=r.value;
+  view.closed=res.closed;view.inOpen=null;view.path=res.path;
+  draw();
+
+  let free=0, counts={};
+  for(const k of cells){ if(k===FREE)free++; else counts[k]=(counts[k]||0)+1; }
+  lastRun={res,ms,free,counts,from:cur().starts[startIx].name,to:cur().ends[endIx].name,map:cur().name,n:N};
+  $('status').textContent=res.found
+    ? `Route found · length ${res.cost.toLocaleString()} · ${res.exp} cells checked`
+    : 'No route exists between these two points';
+  $('hint').textContent=res.found?'Done.':'Try another pair of points.';
+  busy=false;$('go').disabled=false;
+  await sleep(380);
+  showDialog();
+}
+
+/* ============================ the dialog ============================ */
+function bytes(n){
+  if(n>=1e9) return (n/1e9).toFixed(1)+' GB';
+  if(n>=1e6) return (n/1e6).toFixed(1)+' MB';
+  if(n>=1e3) return (n/1e3).toFixed(1)+' KB';
+  return n+' bytes';
+}
+
+function showDialog(){
+  if(!lastRun)return;
+  const {res,ms,free,counts,from,to,map,n}=lastRun;
+  const total=n*n;
+  const obstacleText=Object.keys(counts).length
+    ? Object.keys(counts).map(k=>`${counts[k].toLocaleString()} ${KIND[k].label} cells`).join(', ')
+    : 'no obstacles at all';
+
+  $('dTitle').textContent=res.found?`How the drone got from ${from} to ${to}`:'Why there is no route';
+  $('dSub').textContent=`${map} · ${n} × ${n} grid · the search is replayed slowly on screen so it can be followed`;
+
+  // One byte per entry for an adjacency matrix against one byte per cell for
+  // the flat grid. Both numbers are computed, so they stay right at any size.
+  const matrixBytes=total*total, gridBytes=total;
+
+  const steps = res.found ? [
+    {n:"The map became a graph", u:"Unit 2 — Graphs",
+     d:`Every open cell became a <b>vertex</b> and every legal move became a weighted <b>edge</b>.
+        Buildings, trees, water, racks and blocked zones are simply cells with no edges into them —
+        <b>${obstacleText}</b> here, leaving <b>${free.toLocaleString()} open cells</b>. Neighbours
+        are worked out by arithmetic when needed, so the ${total.toLocaleString()}-vertex graph is
+        never stored as a matrix, which would need about <b>${bytes(matrixBytes)}</b> instead of
+        ${bytes(gridBytes)}.`},
+    {n:"A* search", u:"Unit 2 — Shortest path",
+     d:`A* repeatedly takes the most promising cell and looks at its neighbours. It scores each cell
+        as <b>f = g + h</b>, where g is the distance already travelled and h is the estimate of what
+        is left. It checked <b>${res.exp.toLocaleString()} cells</b> out of ${free.toLocaleString()}
+        and never had to look at the rest.`},
+    {n:"Binary min-heap", u:"Unit 1 — Trees and heaps",
+     d:`The cells waiting to be examined sit in a <b>min-heap</b>, so the cheapest one comes out in
+        O(log n) instead of scanning a list every time. It took
+        <b>${res.ins.toLocaleString()} insertions</b> and <b>${res.ext.toLocaleString()} removals</b>,
+        and grew to <b>${res.peak.toLocaleString()} cells</b> at its largest.`},
+    {n:"Octile distance as the estimate", u:"Why the answer is trustworthy",
+     d:`The estimate h never overstates the real remaining distance, because it assumes a clear run
+        with nothing in the way. An estimate that never overstates is what guarantees the route A*
+        returns is the <b>shortest one that exists</b>, not merely a good one.`},
+    {n:"Route rebuilt from parent links", u:"Path reconstruction",
+     d:`Each cell remembered which cell it was reached from. Starting at ${to} and following those
+        links backwards gives the route, which is then reversed. It is
+        <b>${res.path.length.toLocaleString()} cells long</b>.`}
+  ] : [
+    {n:"The map became a graph", u:"Unit 2 — Graphs",
+     d:`Open cells became vertices. This map has <b>${obstacleText}</b> and
+        <b>${free.toLocaleString()} open cells</b>.`},
+    {n:"A* searched everything reachable", u:"Unit 2 — Shortest path",
+     d:`A* checked <b>${res.exp.toLocaleString()} cells</b> and the waiting list emptied before
+        ${to} was reached, which proves the two points are not connected on this map.`}
+  ];
+
+  $('dList').innerHTML=steps.map(s=>
+    `<li><div><div class="au">${s.u}</div><div class="an">${s.n}</div><div class="ad">${s.d}</div></div></li>`
+  ).join('');
+
+  $('dSum').innerHTML = res.found ? [
+    ['Route length (1000 per straight step)',res.cost.toLocaleString()],
+    ['Steps taken by the drone',(res.path.length-1).toLocaleString()],
+    ['Cells the algorithm checked',res.exp.toLocaleString()],
+    ['Cells it never had to check',(free-res.exp).toLocaleString()],
+    ['Time the algorithm actually took',ms.toFixed(2)+' ms']
+  ].map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('') : '';
+
+  $('dVerdict').innerHTML = res.found
+    ? `<b>Result:</b> this is the shortest route that exists on this map — no other path from
+       ${from} to ${to} can be shorter. A* examined ${(100*res.exp/free).toFixed(0)}% of the open
+       cells to prove it.`
+    : `<b>Result:</b> ${from} and ${to} are completely walled off from each other here.
+       The algorithm is correct to report no route.`;
+
+  $('scrim').hidden=false;
+  $('dClose').focus();
+}
+$('dClose').addEventListener('click',()=>{$('scrim').hidden=true;$('go').focus();});
+$('scrim').addEventListener('click',e=>{if(e.target===$('scrim'))$('scrim').hidden=true;});
+addEventListener('keydown',e=>{if(e.key==='Escape')$('scrim').hidden=true;});
+$('go').addEventListener('click',run);
+addEventListener('resize',()=>{terrainValid=false;draw();});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{
+  terrainValid=false; buildKey(); draw();
+});
+
+N=MAPS[0].size;
+cells=MAPS[0].build();
+buildTools();
+refresh();buildKey();draw();
+</script>
+</body>
+</html>
