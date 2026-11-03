@@ -1,34 +1,62 @@
+# One command builds the backend. The frontend needs Node, but only to build:
+# nothing in the running system is JavaScript except the browser code.
 CXX      := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Iinclude
+CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Iengine/include -Iserver/include
+LDFLAGS  := -pthread
+BIN      := bin
 
-# -O2 matters for honest measurement. Comparing an unoptimised build against
-# an optimised one produces a meaningless result, so the flags are recorded
-# here and quoted in the report.
+# -O2 matters for honest measurement. Comparing an unoptimised build against an
+# optimised one produces a meaningless result, so the flag is fixed here.
 
-.PHONY: all test bench clean
+.PHONY: all server engine test test-api bench web dev serve clean
 
-all: planner tests mission scaling
+all: $(BIN)/server $(BIN)/tests $(BIN)/planner $(BIN)/mission $(BIN)/scaling
 
-planner: src/main.cpp include/*.hpp
-	$(CXX) $(CXXFLAGS) src/main.cpp -o planner
+$(BIN):
+	@mkdir -p $(BIN)
 
-tests: src/test.cpp include/*.hpp
-	$(CXX) $(CXXFLAGS) src/test.cpp -o tests
+$(BIN)/server: server/src/main.cpp server/include/*.hpp engine/include/*.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 
-test: tests
-	./tests
+$(BIN)/planner: engine/src/cli/main.cpp engine/include/*.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@
 
-bench: planner
-	./planner 0.20 10 > results.csv
-	@echo "results written to results.csv"
+$(BIN)/tests: engine/src/cli/test.cpp engine/include/*.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@
 
-# results.csv is committed evidence, so clean does not touch it.
-# Regenerate it deliberately with `make bench`.
+$(BIN)/mission: engine/src/cli/mission_demo.cpp engine/include/*.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+$(BIN)/scaling: engine/src/cli/scaling.cpp engine/include/*.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@
+
+server: $(BIN)/server
+engine: $(BIN)/tests $(BIN)/planner $(BIN)/mission $(BIN)/scaling
+
+test: $(BIN)/tests
+	./$(BIN)/tests
+
+# Starts the server, exercises every endpoint, stops it.
+test-api: $(BIN)/server
+	node scripts/api-smoke.mjs
+
+bench: $(BIN)/planner
+	./$(BIN)/planner 0.20 10 > engine/results.csv
+	@echo "results written to engine/results.csv"
+
+web:
+	cd web && npm install && npm run build
+
+# Production: one process, one port, API and frontend together.
+serve: $(BIN)/server
+	./$(BIN)/server --web web/dist
+
+# Development: Vite on :5173 proxying to the C++ server on :8080.
+dev: $(BIN)/server
+	@echo "run in two terminals:"
+	@echo "  ./bin/server"
+	@echo "  cd web && npm run dev"
+
+# results.csv is committed benchmark evidence, not a build artifact.
 clean:
-	rm -f planner tests mission scaling
-
-mission: src/mission_demo.cpp include/*.hpp
-	$(CXX) $(CXXFLAGS) src/mission_demo.cpp -o mission
-
-scaling: src/scaling.cpp include/*.hpp
-	$(CXX) $(CXXFLAGS) src/scaling.cpp -o scaling
+	rm -rf $(BIN)
