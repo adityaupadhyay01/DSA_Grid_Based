@@ -21,8 +21,9 @@ COPY engine/ engine/
 COPY server/ server/
 # -static-libstdc++ so the runtime image needs no C++ runtime package.
 RUN make bin/server LDFLAGS="-pthread -static-libstdc++ -static-libgcc" \
- && make bin/tests \
- && ./bin/tests
+ && make bin/tests bin/json_test \
+ && ./bin/tests \
+ && ./bin/json_test
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app

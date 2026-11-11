@@ -6,12 +6,33 @@
 #include "astar.hpp"
 #include "open_list.hpp"
 #include "scenario.hpp"
+#include "smooth.hpp"
+#include "planner.hpp"
 
 static int failures = 0;
 
 static void check(bool cond, const char* what) {
     std::printf("  [%s] %s\n", cond ? "PASS" : "FAIL", what);
     if (!cond) ++failures;
+}
+
+// An independent check on smoothing: instead of walking cells the way
+// route::line_clear does, sample points along the segment and look at which
+// cell each one is inside. Samples that land exactly on a cell border belong
+// to two cells at once and are skipped.
+static bool sampled_clear(const Grid& g, int a, int b) {
+    const double x0 = g.x_of(a), y0 = g.y_of(a), x1 = g.x_of(b), y1 = g.y_of(b);
+    const double len = std::sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+    const int steps = static_cast<int>(len * 50) + 1;
+    for (int i = 0; i <= steps; ++i) {
+        const double t = static_cast<double>(i) / steps;
+        const double fx = x0 + (x1 - x0) * t + 0.5, fy = y0 + (y1 - y0) * t + 0.5;
+        if (std::fabs(fx - std::round(fx)) < 1e-6 || std::fabs(fy - std::round(fy)) < 1e-6)
+            continue;
+        if (g.blocked(static_cast<int>(std::floor(fx)), static_cast<int>(std::floor(fy))))
+            return false;
+    }
+    return true;
 }
 
 int main() {
@@ -204,6 +225,114 @@ int main() {
                 if (sc.kind[sc.index(p.x, p.y)] != scenario::FREE) ++buried;
         }
         check(buried == 0, "all 18 demo points stand on open ground");
+    }
+
+    std::printf("\nTest 11: a drawn map is validated, then planned like any other\n");
+    {
+        // 12x12 with a vertical wall of blocked zone at x = 6 and one gap at y = 9.
+        std::string cells(12 * 12, '0');
+        for (int y = 0; y < 12; ++y) if (y != 9) cells[static_cast<size_t>(y * 12 + 6)] = '5';
+        const int from = 0 * 12 + 1, to = 2 * 12 + 10;   // (1,0) -> (10,2)
+
+        const scenario::Scenario sc = planner::custom_scenario(12, 12, cells, from, to);
+        const planner::PlanResult pr = planner::plan_on(sc, 0, 0, 1, 1);
+        check(pr.found, "a route is found through the gap");
+
+        const Grid g = sc.to_grid();
+        BinaryHeapOpenList ref;
+        const SearchResult direct = astar(g, from, to, ref);
+        check(pr.cost == direct.path_cost, "the facade returns the cost a direct A* call returns");
+
+        bool clean = true;
+        for (int c : pr.path) if (g.blocked(c)) clean = false;
+        check(clean, "the route avoids every blocked zone");
+        check(pr.order.size() == pr.expansions, "the replay order covers every expansion");
+
+        const auto refused = [&](int w, int h, const std::string& c, int a, int b) {
+            try { planner::custom_scenario(w, h, c, a, b); }
+            catch (const std::invalid_argument&) { return true; }
+            return false;
+        };
+        std::string bad = cells;
+        bad[50] = 'x';
+        std::string too_high = cells;
+        too_high[50] = '6';
+        check(refused(12, 12, cells.substr(1), from, to), "a wrong cell count is refused");
+        check(refused(12, 12, bad, from, to), "a non-digit cell is refused");
+        check(refused(12, 12, too_high, from, to), "a cell kind above 5 is refused");
+        check(refused(12, 12, cells, 6, to), "a start inside a wall is refused");
+        check(refused(12, 12, cells, from, 6), "an end inside a wall is refused");
+        check(refused(12, 12, cells, from, from), "start equal to end is refused");
+        check(refused(12, 12, cells, -1, to), "a start outside the map is refused");
+        check(refused(12, 12, cells, from, 144), "an end outside the map is refused");
+        check(refused(300, 300, std::string(90000, '0'), 0, 1), "an oversized map is refused");
+        check(refused(1, 1, "0", 0, 0), "a one-cell map is refused");
+    }
+
+    std::printf("\nTest 12: smoothing keeps a route safe and never lengthens it\n");
+    {
+        int found = 0, bad_ends = 0, longer = 0, more_points = 0, blocked_points = 0, clipped = 0;
+        for (int t = 0; t < 200; ++t) {
+            Grid g(30, 30);
+            const int s = g.index(0, 0), gl = g.index(29, 29);
+            g.randomise(0.25, 31000 + t, s, gl);
+            BinaryHeapOpenList h;
+            const SearchResult r = astar(g, s, gl, h);
+            if (!r.found) continue;
+            ++found;
+
+            const std::vector<int> path(r.path.rbegin(), r.path.rend());
+            const std::vector<int> sm = route::smooth(g, path);
+
+            if (sm.front() != path.front() || sm.back() != path.back()) ++bad_ends;
+            if (sm.size() > path.size()) ++more_points;
+            if (route::length_scaled(g, sm) > route::length_scaled(g, path)) ++longer;
+            for (int c : sm) if (g.blocked(c)) ++blocked_points;
+            for (size_t i = 1; i < sm.size(); ++i) {
+                const bool adjacent = std::abs(g.x_of(sm[i]) - g.x_of(sm[i - 1])) <= 1 &&
+                                      std::abs(g.y_of(sm[i]) - g.y_of(sm[i - 1])) <= 1;
+                // Adjacent hops are the original route's own moves; every longer
+                // hop must pass an independent sampled check as well.
+                if (!adjacent && !sampled_clear(g, sm[i - 1], sm[i])) ++clipped;
+            }
+        }
+        std::printf("       %d of 200 maps had a route\n", found);
+        check(found > 100, "enough maps were solvable for the test to mean something");
+        check(bad_ends == 0, "smoothing keeps the start and the delivery point");
+        check(blocked_points == 0, "no waypoint sits on an obstacle");
+        check(clipped == 0, "no straight hop crosses an obstacle (sampled independently)");
+        check(longer == 0, "the smoothed line is never longer than the grid route");
+        check(more_points == 0, "smoothing never adds waypoints");
+    }
+
+    std::printf("\nTest 13: smoothing collapses a clear diagonal and still bends at a gap\n");
+    {
+        Grid open(10, 10);
+        BinaryHeapOpenList h1;
+        const SearchResult r1 = astar(open, open.index(0, 0), open.index(9, 9), h1);
+        const std::vector<int> p1(r1.path.rbegin(), r1.path.rend());
+        const std::vector<int> s1 = route::smooth(open, p1);
+        check(p1.size() == 10, "the grid route visits ten cells");
+        check(s1.size() == 2, "an unobstructed diagonal collapses to its two ends");
+
+        Grid wall(5, 5);
+        for (int y = 0; y < 5; ++y) wall.set_blocked(2, y, true);
+        wall.set_blocked(2, 0, false);
+        BinaryHeapOpenList h2;
+        const SearchResult r2 = astar(wall, wall.index(0, 2), wall.index(4, 2), h2);
+        const std::vector<int> p2(r2.path.rbegin(), r2.path.rend());
+        const std::vector<int> s2 = route::smooth(wall, p2);
+        check(s2.size() >= 3, "a route through a gap keeps at least one bend");
+        check(s2.size() <= p2.size(), "and is still no longer in waypoints");
+
+        // A line that threads exactly between two diagonal obstacles clips both.
+        Grid pinch(4, 4);
+        pinch.set_blocked(0, 0, true);
+        pinch.set_blocked(1, 1, true);
+        check(!route::line_clear(pinch, pinch.index(0, 1), pinch.index(1, 0)),
+              "a hop through a diagonal pinch is refused");
+        check(route::line_clear(pinch, pinch.index(0, 3), pinch.index(3, 3)),
+              "a hop along an open row is allowed");
     }
 
     std::printf("\n%s (%d failure%s)\n",

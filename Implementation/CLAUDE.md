@@ -9,10 +9,16 @@ Data Structures and Algorithms II (CCSE0301), faculty Mr. Shamshad Ali. PBL proj
 
 A C++17 grid path planner with a React + TypeScript frontend. The backend is entirely C++:
 engine, HTTP server, JSON and static file serving. Node is a build-time dependency only — it
-compiles the frontend and is not present in the running system. The subject is **not** A\*: A\* is held
-fixed and six OPEN-list structures are swapped behind one interface, so any runtime difference
-belongs to the structure. Base paper: Gao, Li and Pang (2026), *Scientific Reports* 16:18275, which
-reports timings without ever naming its OPEN-list structure. That is the gap.
+compiles the frontend and is not present in the running system.
+
+**Status (2026-11-11): this is no longer only a college project.** The DSA-course constraint — hold
+A\* fixed, swap six OPEN lists, use only syllabus structures — has been lifted by the author. Any
+algorithm may be added where it makes the planner better, and the frontend may use any web
+technology. What the course work *established* is still true and still tested, so it stays: A\* with
+six interchangeable OPEN lists (Gao, Li and Pang (2026), *Scientific Reports* 16:18275, never names
+its OPEN-list structure — that was the gap), the benchmark in `engine/results.csv`, and the rules
+below about keeping the comparison honest. New algorithms get the same treatment: they live in
+`engine/`, and a test makes them disagree with something independent before they are trusted.
 
 ## The one rule
 
@@ -26,10 +32,10 @@ there, and the benchmark numbers stop describing the code that actually runs.
 
 ```bash
 make                          # server, tests and CLI tools; needs only g++
-make test                     # ten C++ tests, no Node, no network
+make test                     # 13 engine tests + the JSON reader suite, no Node, no network
 cd web && npm install && npm run build && cd ..
 make serve                    # http://127.0.0.1:8080 — API and frontend together
-make test-api                 # 49 end-to-end checks
+make test-api                 # 89 end-to-end checks, including POST /api/route
 docker build -t drone-planner . && docker run --rm -p 8080:8080 drone-planner
 ```
 
@@ -45,11 +51,13 @@ engine/include/
   astar.hpp       the search; takes an optional SearchTrace*
   mission.hpp     knapsack selector and both tour solvers
   scenario.hpp    the three hand-built demo maps
-  planner.hpp     the public façade: scenarios(), plan(), compare()
+  smooth.hpp      line-of-sight smoothing: grid route -> flight line
+  planner.hpp     the public façade: scenarios(), plan(), plan_on(), custom_scenario(), compare()
 server/include/
-  http.hpp        sockets, worker pool, request parsing, static files, shutdown
-  json.hpp        a writer; the server never parses JSON, input is the query string
-server/src/main.cpp   the four endpoints and nothing else
+  http.hpp        sockets, worker pool, GET and POST, request parsing, static files, shutdown
+  json.hpp        a writer, and a deliberately narrow reader (one flat object) for POST bodies
+server/src/main.cpp        the endpoints and nothing else
+server/src/json_test.cpp   tests for the JSON reader; run by `make test`
 web/src/          React + TypeScript; types.ts is the wire contract
 ```
 
@@ -84,6 +92,21 @@ test-api`; do not delete those checks.
 changes in `server/src/main.cpp`, change it there too. Nothing checks this at compile time — the
 API smoke test is what catches it.
 
+**`POST /api/route` is the one place untrusted bytes become a grid.** Everything about a drawn map is
+checked in `planner::custom_scenario()` (size 2..256, digits 0..5, start and end inside the map and
+free). The HTTP layer caps the body at 256 KB, requires `Content-Length` and
+`application/json`, and refuses chunked bodies. The JSON reader accepts one flat object and nothing
+nested; keep it that way. The unsorted array (structure 0) is refused on drawn maps because it is
+O(n²) overall.
+
+**Smoothing is a shortcut, not an optimum.** `route::smooth()` never crosses an obstacle, never clips
+a corner and never lengthens the route, and the tests prove those. It is *not* the shortest any-angle
+path, and nothing in the UI or the docs may say it is. If a true any-angle result is wanted, add
+Theta\* in `engine/` and test it against this.
+
+**The `.gitignore` entry `tests` ignores any directory with that name**, not only the binary. A new
+`tests/` folder is silently untracked. Put test sources somewhere else.
+
 **`SIGPIPE` is ignored in `listen_and_serve()`.** Without that, a client disconnecting mid-response
 kills the process.
 
@@ -96,8 +119,10 @@ is expected, and the README says so.
 
 ## The animation must stay honest
 
-`/api/plan` returns `order`, the sequence in which A\* actually closed cells. The browser replays
-that array. It must never run its own search and present the result as the engine's.
+`/api/plan` and `/api/route` return `order`, the sequence in which A\* actually closed cells. The
+browser replays that array. It must never run its own search and present the result as the engine's.
+The standalone `index.html` at the repository root is the exception that proves the rule: it plans in
+JavaScript, says so on the page, and is a demo, not the product.
 
 ## Canonical measured numbers
 

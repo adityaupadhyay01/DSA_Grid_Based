@@ -3,6 +3,7 @@ import type {
   CompareResponse,
   HealthResponse,
   PlanResponse,
+  RouteRequest,
   ScenariosResponse,
 } from '../types.js';
 
@@ -19,11 +20,7 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
-  const url = new URL(path, window.location.origin);
-  for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, String(v));
-
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
+async function decode<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let body: ApiErrorBody | undefined;
     try {
@@ -41,6 +38,22 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
   return (await res.json()) as T;
 }
 
+async function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
+  const url = new URL(path, window.location.origin);
+  for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, String(v));
+  return decode<T>(await fetch(url, { headers: { accept: 'application/json' } }));
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  return decode<T>(
+    await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
 export const api = {
   scenarios: () => get<ScenariosResponse>('/api/scenarios'),
   plan: (p: { scenarioId: string; startIndex: number; endIndex: number; structure?: number }) =>
@@ -50,6 +63,8 @@ export const api = {
       endIndex: p.endIndex,
       ...(p.structure !== undefined ? { structure: p.structure } : {}),
     }),
+  /** A map the user drew; it is too big for a query string, so it is POSTed. */
+  route: (r: RouteRequest) => post<PlanResponse>('/api/route', r),
   compare: (p: { scenarioId: string; startIndex: number; endIndex: number }) =>
     get<CompareResponse>('/api/compare', p),
   health: () => get<HealthResponse>('/health/ready'),

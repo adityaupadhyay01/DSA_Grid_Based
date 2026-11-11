@@ -41,7 +41,7 @@ engine/
   results.csv, evidence/   committed benchmark data and recorded output
 server/
   include/   http.hpp (sockets, worker pool, static files), json.hpp (writer)
-  src/       main.cpp — the four endpoints, nothing else
+  src/       main.cpp — the endpoints, nothing else; json_test.cpp tests the JSON reader
 web/
   src/       React + TypeScript; types.ts is the wire contract
 docs/        design book, wireframes, flowcharts, build plan
@@ -81,7 +81,7 @@ cd web && npm run dev        # terminal 2 — Vite on :5173, proxying to :8080
 ### The engine on its own
 
 ```bash
-make test        # ten C++ tests; needs nothing but g++
+make test        # engine tests (13) and JSON reader tests; needs nothing but g++
 make bench       # writes engine/results.csv
 ./bin/mission    # one mission end to end: A* distances, selection, ordering
 ```
@@ -91,13 +91,30 @@ make bench       # writes engine/results.csv
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/scenarios` | the three maps, their cells and their start/end points |
-| `GET /api/plan?scenarioId=river&startIndex=0&endIndex=2&structure=1&reps=5` | one route, with the search recorded |
+| `GET /api/plan?scenarioId=river&startIndex=0&endIndex=2&structure=1&reps=5` | one route on a built-in map, with the search recorded |
+| `POST /api/route` with `{ width, height, cells, start, end }` | the same, on a map the user drew (up to 256 × 256; `application/json`) |
 | `GET /api/compare?scenarioId=river&startIndex=0&endIndex=2` | the same route with all six structures |
 | `GET /health/live` · `GET /health/ready` | process is up · process can do useful work |
 
 Every failure returns `{ "error": { "code", "message", "requestId" } }` and the same id appears in
 the access log. `server --healthcheck` probes a running instance and exits 0 or 1, which is what
 the container health check uses — there is no curl in the runtime image.
+
+## Drawn maps and the flight line
+
+The third step of the page can be a map you draw yourself: a 100 × 100 grid with buildings, trees,
+blocked zones, an eraser and movable start and delivery points. The map is sent to
+`POST /api/route` as a flat JSON object — `cells` is one digit per cell, row-major — and the C++
+engine plans on it exactly as it does on the built-in maps. The request is validated in one place,
+`planner::custom_scenario()`: size, digits, start and end inside the map and not inside an
+obstacle.
+
+Every response carries two routes. `path` is what A\* found, the shortest route on the grid when
+the drone moves in eight directions. `smoothPath` is the same route shortened by line-of-sight
+smoothing: from each waypoint, jump to the farthest later cell that can be seen in a straight line
+without touching an obstacle or clipping a corner. It is never longer than `path` and never adds
+waypoints. It is **not** claimed to be the shortest any-angle path — that needs Theta\* or a
+visibility graph — and the explanation dialog says so.
 
 ## The animation is not a re-simulation
 
@@ -150,8 +167,8 @@ Only the cross-structure test caught it.
 ## Tests
 
 ```bash
-make test        # 10 C++ tests — no Node, no network
-make test-api    # 49 end-to-end checks against a running server
+make test        # 13 engine tests + the JSON reader suite — no Node, no network
+make test-api    # 89 end-to-end checks against a running server (includes POST /api/route)
 cd web && npm run typecheck
 ```
 

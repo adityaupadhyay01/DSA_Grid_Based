@@ -7,13 +7,12 @@
 // thin façade over it, shaped so that a caller in another language does not
 // have to know any of it.
 //
-// The N-API addon, the command-line tools and the C++ tests all go through
+// The HTTP server, the command-line tools and the C++ tests all go through
 // this header, so there is one definition of what "plan a route" means and no
-// chance of the web stack drifting away from the benchmarked code.
+// chance of the web layer drifting away from the code that was benchmarked.
 //
-// Nothing here allocates on behalf of the caller or throws across a boundary
-// except std::invalid_argument for bad input, which the binding turns into a
-// JavaScript TypeError.
+// The only exception thrown is std::invalid_argument for bad input, which the
+// server turns into a 400 response.
 // ---------------------------------------------------------------------------
 #include <algorithm>
 #include <chrono>
@@ -26,6 +25,7 @@
 #include "grid.hpp"
 #include "open_list.hpp"
 #include "scenario.hpp"
+#include "smooth.hpp"
 
 namespace planner {
 
@@ -79,6 +79,13 @@ struct PlanResult {
     int    reps       = 0;
     std::vector<int> path;         // start -> goal
     std::vector<int> order;        // the order A* actually closed cells in
+
+    // The grid route shortened by line-of-sight smoothing (see smooth.hpp).
+    // Both lengths are straight-line, in 1000-per-cell units, so they compare
+    // like for like. Empty / zero when no route was found.
+    std::vector<int> smoothPath;   // start -> goal, waypoints only
+    int    gridLength   = 0;
+    int    smoothLength = 0;
 };
 
 struct StructureTiming {
@@ -137,11 +144,58 @@ inline SearchResult timed(const Grid& grid, int start, int goal, int which,
 }  // namespace detail
 
 // --------------------------- operations ---------------------------
-inline PlanResult plan(const std::string& scenarioId, int startIndex, int endIndex,
-                       int structure = 1, int reps = 5) {
+// --------------------------- custom maps ---------------------------
+constexpr int kCustomMinSide = 2;
+constexpr int kCustomMaxSide = 256;   // 65,536 cells: a request cannot ask for an hour of work
+
+/**
+ * Builds a one-route scenario from a map somebody drew. `cells` holds one digit
+ * per cell, row-major, each a scenario::Kind. Everything about it is checked
+ * here, because this is the one place untrusted data becomes a grid.
+ */
+inline scenario::Scenario custom_scenario(int width, int height, const std::string& cells,
+                                          int start, int end) {
+    if (width < kCustomMinSide || width > kCustomMaxSide ||
+        height < kCustomMinSide || height > kCustomMaxSide)
+        throw std::invalid_argument("width and height must each be between 2 and 256");
+
+    const size_t total = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (cells.size() != total)
+        throw std::invalid_argument("cells must hold exactly width x height characters");
+
+    scenario::Scenario s;
+    s.id = "custom";
+    s.name = "Custom map";
+    s.blurb = "drawn by the caller";
+    s.w = width;
+    s.h = height;
+    s.kind.resize(total);
+    for (size_t i = 0; i < total; ++i) {
+        const int k = cells[i] - '0';
+        if (k < 0 || k > scenario::BLOCKED)
+            throw std::invalid_argument("cells may only contain the digits 0 to 5");
+        s.kind[i] = static_cast<uint8_t>(k);
+    }
+
+    const int n = static_cast<int>(total);
+    if (start < 0 || start >= n) throw std::invalid_argument("start is outside the map");
+    if (end < 0 || end >= n)     throw std::invalid_argument("end is outside the map");
+    if (start == end)            throw std::invalid_argument("start and end are the same cell");
+    if (s.kind[static_cast<size_t>(start)] != scenario::FREE)
+        throw std::invalid_argument("start is inside an obstacle");
+    if (s.kind[static_cast<size_t>(end)] != scenario::FREE)
+        throw std::invalid_argument("end is inside an obstacle");
+
+    s.starts = { {"Start", start % width, start / width} };
+    s.ends   = { {"Delivery", end % width, end / width} };
+    return s;
+}
+
+/** Plans on any scenario: a built-in one, or one from custom_scenario(). */
+inline PlanResult plan_on(const scenario::Scenario& s, int startIndex, int endIndex,
+                          int structure = 1, int reps = 5) {
     if (reps < 1 || reps > 51) throw std::invalid_argument("reps must be 1..51");
 
-    const scenario::Scenario& s = find_scenario(scenarioId);
     int start = 0, goal = 0;
     detail::resolve(s, startIndex, endIndex, &start, &goal);
 
@@ -170,7 +224,18 @@ inline PlanResult plan(const std::string& scenarioId, int startIndex, int endInd
     out.reps       = reps;
     out.order      = std::move(trace.expansion_order);
     out.path.assign(res.path.rbegin(), res.path.rend());   // A* walks it backwards
+
+    if (res.found) {
+        out.smoothPath   = route::smooth(grid, out.path);
+        out.gridLength   = route::length_scaled(grid, out.path);
+        out.smoothLength = route::length_scaled(grid, out.smoothPath);
+    }
     return out;
+}
+
+inline PlanResult plan(const std::string& scenarioId, int startIndex, int endIndex,
+                       int structure = 1, int reps = 5) {
+    return plan_on(find_scenario(scenarioId), startIndex, endIndex, structure, reps);
 }
 
 inline CompareResult compare(const std::string& scenarioId, int startIndex, int endIndex,

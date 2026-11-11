@@ -16,6 +16,8 @@ export const CellKind = {
   Tree: 2,
   Water: 3,
   Rack: 4,
+  /** A restricted zone. Only drawn maps use it; the built-in maps do not. */
+  Block: 5,
 } as const;
 export type CellKind = (typeof CellKind)[keyof typeof CellKind];
 
@@ -25,6 +27,7 @@ export const CELL_KIND_LABEL: Record<CellKind, string> = {
   [CellKind.Tree]: 'tree',
   [CellKind.Water]: 'water',
   [CellKind.Rack]: 'warehouse rack',
+  [CellKind.Block]: 'blocked zone',
 };
 
 /** Movement costs are integers so that route comparisons are exact. */
@@ -94,6 +97,26 @@ export interface PlanResponse {
   path: number[];
   /** The order in which A* closed cells. The UI replays this, it does not re-simulate. */
   order: number[];
+  /**
+   * The grid route shortened to the waypoints a drone would fly (line-of-sight
+   * smoothing). Empty when no route exists.
+   */
+  smoothPath: number[];
+  /** Straight-line length of `path`, 1000 per cell. Same metric as `smoothLength`. */
+  gridLength: number;
+  /** Straight-line length of `smoothPath`. Never more than `gridLength`. */
+  smoothLength: number;
+}
+
+/** POST /api/route: a map somebody drew. `cells` is one digit per cell, row-major. */
+export interface RouteRequest {
+  width: number;
+  height: number;
+  cells: string;
+  start: number;
+  end: number;
+  structure?: number;
+  reps?: number;
 }
 
 export interface StructureTimingDto {

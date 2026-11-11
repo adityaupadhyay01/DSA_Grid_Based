@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
 // The backend.
 //
-// Four endpoints over the planning engine, plus the built React app served
-// from the same origin. The engine is linked in, so a request reaches A* as a
-// function call: there is no second process and nothing is serialised between
-// the HTTP layer and the algorithm.
+// A handful of endpoints over the planning engine, plus the built React app
+// served from the same origin. The engine is linked in, so a request reaches
+// A* as a function call: there is no second process and nothing is serialised
+// between the HTTP layer and the algorithm.
 //
 //   ./bin/server                       127.0.0.1:8080, API only
 //   ./bin/server --web web/dist        also serve the built frontend
@@ -12,7 +12,8 @@
 //
 // Endpoints
 //   GET /api/scenarios   the three maps, their cells and their start/end points
-//   GET /api/plan        one route, with the search recorded
+//   GET /api/plan        one route on a built-in map, with the search recorded
+//   POST /api/route      the same, on a map the caller drew (JSON body)
 //   GET /api/compare     the same route with all six OPEN lists
 //   GET /health/live     the process is up
 //   GET /health/ready    the process can do useful work
@@ -104,7 +105,8 @@ std::string scenarios_payload() {
 
     w.key("cellKindLabels");
     w.begin_object();
-    for (uint8_t k = 0; k <= 4; ++k) w.field(std::to_string(k), scenario::kind_name(k));
+    for (uint8_t k = 0; k <= scenario::BLOCKED; ++k)
+        w.field(std::to_string(k), scenario::kind_name(k));
     w.end_object();
 
     w.end_object();
@@ -146,22 +148,10 @@ bool read_query(const http::Request& req, Query* q, http::Response* err, bool wa
     return true;
 }
 
-// --------------------------- GET /api/plan ---------------------------
-http::Response handle_plan(const http::Request& req) {
-    Query q;
-    http::Response err;
-    if (!read_query(req, &q, &err, true)) return err;
-
-    planner::PlanResult r;
-    try {
-        r = planner::plan(q.scenarioId, q.startIndex, q.endIndex, q.structure, q.reps);
-    } catch (const std::invalid_argument& e) {
-        // Bad input is the caller's mistake, not a server fault.
-        const std::string what = e.what();
-        const int status = what.rfind("no scenario", 0) == 0 ? 404 : 400;
-        return fail(status, status == 404 ? "NOT_FOUND" : "BAD_REQUEST", what, req.id);
-    }
-
+// --------------------------- the plan response ---------------------------
+// One shape for a built-in map (GET /api/plan) and a drawn one (POST
+// /api/route), so the browser has a single type to decode.
+std::string plan_payload(const planner::PlanResult& r) {
     json::Writer w;
     w.begin_object();
     w.field("engine", "c++");
@@ -181,8 +171,98 @@ http::Response handle_plan(const http::Request& req) {
     // The order A* really closed cells in. The browser replays this rather
     // than running its own search and claiming the two agree.
     w.field("order", r.order);
+    // The grid route shortened to the waypoints a drone would actually fly.
+    w.field("smoothPath", r.smoothPath);
+    w.field("gridLength", r.gridLength);
+    w.field("smoothLength", r.smoothLength);
     w.end_object();
-    return http::Response::json(w.str());
+    return w.str();
+}
+
+// --------------------------- GET /api/plan ---------------------------
+http::Response handle_plan(const http::Request& req) {
+    Query q;
+    http::Response err;
+    if (!read_query(req, &q, &err, true)) return err;
+
+    planner::PlanResult r;
+    try {
+        r = planner::plan(q.scenarioId, q.startIndex, q.endIndex, q.structure, q.reps);
+    } catch (const std::invalid_argument& e) {
+        // Bad input is the caller's mistake, not a server fault.
+        const std::string what = e.what();
+        const int status = what.rfind("no scenario", 0) == 0 ? 404 : 400;
+        return fail(status, status == 404 ? "NOT_FOUND" : "BAD_REQUEST", what, req.id);
+    }
+
+    return http::Response::json(plan_payload(r));
+}
+
+// --------------------------- POST /api/route ---------------------------
+// A map the caller drew. It is ten thousand characters, so it travels as a
+// JSON body rather than in the URL:
+//   { "width":100, "height":100, "cells":"000...", "start":303, "end":9696,
+//     "structure":1, "reps":5 }
+// `structure` and `reps` are optional. The structure defaults to the binary
+// heap, and 0 (the unsorted array, O(n^2) overall) is refused here because on
+// a map this size it would turn one request into seconds of work.
+http::Response handle_route(const http::Request& req) {
+    json::Object body;
+    std::string why;
+    if (!json::parse_flat_object(req.body, &body, &why))
+        return fail(400, "BAD_JSON", why, req.id);
+
+    static const char* const known[] = { "width", "height", "cells", "start", "end",
+                                         "structure", "reps" };
+    for (const auto& kv : body) {
+        bool ok = false;
+        for (const char* k : known) if (kv.first == k) ok = true;
+        if (!ok) return fail(400, "BAD_REQUEST", "unknown field '" + kv.first + "'", req.id);
+    }
+
+    http::Response err;
+    const auto integer = [&](const char* key, bool required, int fallback, int* out) {
+        const auto it = body.find(key);
+        if (it == body.end() || it->second.type == json::Value::kNull) {
+            if (required) {
+                err = fail(400, "BAD_REQUEST", std::string(key) + " is required", req.id);
+                return false;
+            }
+            *out = fallback;
+            return true;
+        }
+        if (!json::as_int(it->second, out)) {
+            err = fail(400, "BAD_REQUEST", std::string(key) + " must be a whole number", req.id);
+            return false;
+        }
+        return true;
+    };
+
+    int width = 0, height = 0, start = 0, end = 0, structure = 1, reps = 5;
+    if (!integer("width", true, 0, &width) || !integer("height", true, 0, &height) ||
+        !integer("start", true, 0, &start) || !integer("end", true, 0, &end) ||
+        !integer("structure", false, 1, &structure) || !integer("reps", false, 5, &reps))
+        return err;
+
+    const auto cells = body.find("cells");
+    if (cells == body.end() || cells->second.type != json::Value::kString)
+        return fail(400, "BAD_REQUEST", "cells must be a string of digits", req.id);
+
+    if (reps < 1 || reps > 51)
+        return fail(400, "BAD_REQUEST", "reps must be between 1 and 51", req.id);
+    if (structure < 1 || structure >= planner::structure_count())
+        return fail(400, "BAD_REQUEST",
+                    "structure must be between 1 and 5 for a drawn map", req.id);
+
+    planner::PlanResult r;
+    try {
+        const scenario::Scenario s =
+            planner::custom_scenario(width, height, cells->second.text, start, end);
+        r = planner::plan_on(s, 0, 0, structure, reps);
+    } catch (const std::invalid_argument& e) {
+        return fail(400, "BAD_REQUEST", e.what(), req.id);
+    }
+    return http::Response::json(plan_payload(r));
 }
 
 // --------------------------- GET /api/compare ---------------------------
@@ -244,7 +324,7 @@ http::Response handle_ready(const http::Request&) {
     w.field("structures", planner::structure_count());
     w.end_object();
     w.field("uptimeSeconds", static_cast<int>(up));
-    w.field("version", "2.0.0");
+    w.field("version", "2.1.0");
     w.end_object();
     return http::Response::json(w.str(), loaded ? 200 : 503);
 }
@@ -346,6 +426,7 @@ int main(int argc, char** argv) {
         return r;
     });
     server.route("/api/plan", handle_plan);
+    server.route_post("/api/route", handle_route);
     server.route("/api/compare", handle_compare);
     server.route("/health/live", [](const http::Request&) {
         return http::Response::json(R"({"status":"ok"})");

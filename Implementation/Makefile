@@ -10,7 +10,7 @@ BIN      := bin
 
 .PHONY: all server engine test test-api bench web dev serve clean
 
-all: $(BIN)/server $(BIN)/tests $(BIN)/planner $(BIN)/mission $(BIN)/scaling
+all: $(BIN)/server $(BIN)/tests $(BIN)/json_test $(BIN)/planner $(BIN)/mission $(BIN)/scaling
 
 $(BIN):
 	@mkdir -p $(BIN)
@@ -24,6 +24,9 @@ $(BIN)/planner: engine/src/cli/main.cpp engine/include/*.hpp | $(BIN)
 $(BIN)/tests: engine/src/cli/test.cpp engine/include/*.hpp | $(BIN)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
+$(BIN)/json_test: server/src/json_test.cpp server/include/json.hpp | $(BIN)
+	$(CXX) $(CXXFLAGS) $< -o $@
+
 $(BIN)/mission: engine/src/cli/mission_demo.cpp engine/include/*.hpp | $(BIN)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
@@ -33,8 +36,10 @@ $(BIN)/scaling: engine/src/cli/scaling.cpp engine/include/*.hpp | $(BIN)
 server: $(BIN)/server
 engine: $(BIN)/tests $(BIN)/planner $(BIN)/mission $(BIN)/scaling
 
-test: $(BIN)/tests
+# The engine suite and the JSON reader suite. Neither needs Node or a network.
+test: $(BIN)/tests $(BIN)/json_test
 	./$(BIN)/tests
+	./$(BIN)/json_test
 
 # Starts the server, exercises every endpoint, stops it.
 test-api: $(BIN)/server

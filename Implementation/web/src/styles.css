@@ -6,6 +6,7 @@
   --grass: #dcebd4; --tree: #4a8a4e; --tree-dark: #2f6a38; --trunk: #7a5733;
   --water: #9cc6e4; --water-line: #5e9bc6;
   --rack: #b08647; --rack-line: #7d5c2b;
+  --block: #6b6f76; --block-line: #43474d;
   --route: #d2541c; --start: #1b7a4a; --end: #b3246b; --bad: #a62f3a;
   color-scheme: light;
 }
@@ -18,6 +19,7 @@
     --grass: #1e3324; --tree: #4f9a56; --tree-dark: #79c47f; --trunk: #8a6540;
     --water: #2a5f87; --water-line: #6fb2dd;
     --rack: #9a7439; --rack-line: #d8ab5e;
+    --block: #7b818a; --block-line: #aeb5bd;
     --route: #ff7a44; --start: #4cb882; --end: #e86aa6; --bad: #e2707a;
     color-scheme: dark;
   }
@@ -81,6 +83,49 @@ button.secondary:hover:not(:disabled) { border-color: var(--pick); color: var(--
 button:disabled { opacity: 0.45; cursor: default; }
 button:focus-visible, .option:focus-visible { outline: 3px solid var(--pick); outline-offset: 2px; }
 .hint { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--soft); }
+.hint.bad { color: var(--bad); }
+.step .note { margin: 0 0 10px; font-size: 14.5px; color: var(--soft); max-width: 72ch; }
+
+/* ---- the map editor ---- */
+.tools { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-end; }
+.tools.spaced { margin-top: 11px; }
+.tool {
+  display: flex; align-items: center; gap: 8px; font: inherit; font-size: 14.5px; font-weight: 500;
+  padding: 8px 13px; border: 2px solid var(--line); background: var(--card); color: var(--ink);
+  cursor: pointer; border-radius: 0;
+}
+.tool .swatch { border: 1px solid var(--line2); flex: none; display: block; }
+.tool .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1px solid var(--line2); }
+.tool:hover { border-color: var(--pick); }
+.tool[aria-pressed='true'] { border-color: var(--pick); box-shadow: inset 0 0 0 2px var(--pick); }
+.toolgroup { display: flex; flex-direction: column; gap: 5px; }
+.toolgroup label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--soft);
+}
+.toolgroup .row { display: flex; gap: 9px; flex-wrap: wrap; }
+.brush { display: inline-flex; border: 2px solid var(--line); }
+.brush button {
+  font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding: 7px 13px; border: 0;
+  border-right: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
+}
+.brush button:last-child { border-right: 0; }
+.brush button[aria-pressed='true'] { background: var(--pick); color: #fff; }
+.minor {
+  font: inherit; font-size: 14px; font-weight: 500; padding: 8px 14px; border: 2px solid var(--line);
+  background: var(--card); color: var(--ink); cursor: pointer; border-radius: 0;
+}
+.minor:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+.tool:focus-visible, .brush button:focus-visible, .minor:focus-visible { outline: 3px solid var(--pick); outline-offset: 2px; }
+
+/* ---- the benchmark, tucked away until asked for ---- */
+details.bench { margin-bottom: 12px; }
+details.bench > summary {
+  cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--soft);
+  padding: 8px 2px;
+}
+details.bench > summary:hover { color: var(--pick); }
+details.bench[open] > summary { margin-bottom: 6px; }
 .compare { background: var(--card); border: 1px solid var(--line); padding: 13px 16px; margin-bottom: 12px; }
 .compare h2 {
   margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.1em;
@@ -102,7 +147,8 @@ tbody tr.best td { color: var(--start); font-weight: 600; }
   font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--soft);
 }
 .canvas-wrap { width: min(72vh, 780px, 100%); aspect-ratio: 1; margin: 14px auto; }
-.canvas-wrap canvas { display: block; width: 100%; height: 100%; background: var(--free); }
+.canvas-wrap canvas { display: block; width: 100%; height: 100%; background: var(--free); touch-action: none; }
+.canvas-wrap canvas.editing { cursor: crosshair; }
 .legend {
   display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 11px 14px; border-top: 1px solid var(--line);
   font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--soft);
@@ -110,6 +156,7 @@ tbody tr.best td { color: var(--start); font-weight: 600; }
 .legend span { display: inline-flex; align-items: center; gap: 7px; }
 .legend .swatch { width: 20px; height: 20px; flex: none; border: 1px solid var(--line2); display: block; }
 .legend .chip { width: 14px; height: 14px; border: 1px solid var(--line2); flex: none; }
+.legend .chip.dashed { border: 0; height: 0; width: 22px; border-top: 3px dashed var(--ink); }
 .foot { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 11px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--soft); }
 .scrim { position: fixed; inset: 0; background: rgba(10, 18, 24, 0.62); display: flex; align-items: center; justify-content: center; padding: 18px; z-index: 40; }
 .modal { background: var(--card); border: 2px solid var(--ink); max-width: 620px; width: 100%; max-height: 88vh; overflow: auto; }

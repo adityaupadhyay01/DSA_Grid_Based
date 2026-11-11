@@ -19,7 +19,9 @@
 // ---------------------------------------------------------------------------
 namespace scenario {
 
-enum Kind : uint8_t { FREE = 0, BUILDING = 1, TREE = 2, WATER = 3, RACK = 4 };
+// BLOCKED is a restricted zone. None of the three built-in maps uses it; it
+// exists for maps a person draws, where "no-fly" is the thing they most want.
+enum Kind : uint8_t { FREE = 0, BUILDING = 1, TREE = 2, WATER = 3, RACK = 4, BLOCKED = 5 };
 
 inline const char* kind_name(uint8_t k) {
     switch (k) {
@@ -27,6 +29,7 @@ inline const char* kind_name(uint8_t k) {
         case TREE:     return "tree";
         case WATER:    return "water";
         case RACK:     return "warehouse rack";
+        case BLOCKED:  return "blocked zone";
         default:       return "free";
     }
 }

@@ -7,8 +7,9 @@
 // project whose demonstration needs `npm install` to work at all has a second
 // way to fail in front of an audience.
 //
-// What it does: parses a request line and headers, routes by path, serves
-// static files with a traversal guard, and shuts down cleanly on SIGINT.
+// What it does: parses a request line and headers, routes by method and path,
+// reads a Content-Length body for POST (capped), serves static files with a
+// traversal guard, and shuts down cleanly on SIGINT.
 // What it does not do: keep-alive, chunked encoding, TLS, uploads. Nothing
 // here needs them, and each would be a silent correctness trap if written
 // badly.
@@ -44,6 +45,7 @@ struct Request {
     std::string path;
     std::map<std::string, std::string> query;
     std::map<std::string, std::string> headers;
+    std::string body;        // POST only; exactly Content-Length bytes
     std::string id;          // echoed back, and printed in the access log
 
     std::string param(const std::string& key, const std::string& fallback = "") const {
@@ -96,7 +98,9 @@ inline const char* status_text(int code) {
         case 403: return "Forbidden";
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
+        case 411: return "Length Required";
         case 413: return "Payload Too Large";
+        case 415: return "Unsupported Media Type";
         case 500: return "Internal Server Error";
         case 503: return "Service Unavailable";
         default:  return "OK";
@@ -204,6 +208,9 @@ public:
 
     void route(const std::string& path, Handler h) { routes_[path] = std::move(h); }
 
+    /** A POST endpoint. The body is in Request::body, and must be application/json. */
+    void route_post(const std::string& path, Handler h) { post_routes_[path] = std::move(h); }
+
     /** Files under this directory are served when no route matches. */
     void static_root(std::string dir) { static_root_ = std::move(dir); }
 
@@ -292,6 +299,11 @@ private:
             }
         }
 
+        // The first read may already have pulled in the start of the body.
+        const size_t split = head.find("\r\n\r\n");
+        std::string body = head.substr(split + 4);
+        head.erase(split + 4);
+
         Request req;
         req.id = next_id();
 
@@ -319,6 +331,38 @@ private:
             req.id = it->second;
         }
 
+        if (req.method == "POST") {
+            if (req.headers.count("transfer-encoding")) {
+                send(conn, error(400, "BAD_REQUEST", "chunked request bodies are not supported"));
+                return;
+            }
+            const auto cl = req.headers.find("content-length");
+            if (cl == req.headers.end()) {
+                send(conn, error(411, "LENGTH_REQUIRED", "POST needs a Content-Length header"));
+                return;
+            }
+            const std::string& len = cl->second;
+            if (len.empty() || len.size() > 9 || len.find_first_not_of("0123456789") != std::string::npos) {
+                send(conn, error(400, "BAD_REQUEST", "Content-Length must be a whole number"));
+                return;
+            }
+            const size_t want = static_cast<size_t>(std::stoul(len));
+            if (want > kMaxBody) {
+                send(conn, error(413, "PAYLOAD_TOO_LARGE", "request body is too large"));
+                return;
+            }
+            while (body.size() < want) {
+                const ssize_t n = ::recv(conn, buf, sizeof(buf), 0);
+                if (n <= 0) {
+                    send(conn, error(400, "BAD_REQUEST", "request body ended early"));
+                    return;
+                }
+                body.append(buf, static_cast<size_t>(n));
+            }
+            body.resize(want);   // anything past Content-Length is not part of this request
+            req.body = std::move(body);
+        }
+
         Response res = dispatch(req);
         send(conn, res);
 
@@ -330,19 +374,52 @@ private:
         }
     }
 
+    static Response error(int status, const char* code, const char* message) {
+        return Response::json(std::string(R"({"error":{"code":")") + code +
+                              R"(","message":")" + message + R"("}})", status);
+    }
+
+    static Response invoke(const Handler& h, const Request& req) {
+        try {
+            return h(req);
+        } catch (const std::exception&) {
+            // The message is deliberately not echoed: it can name internals.
+            return error(500, "INTERNAL_ERROR", "the server could not complete the request");
+        }
+    }
+
     Response dispatch(const Request& req) {
+        if (req.method == "POST") {
+            const auto post = post_routes_.find(req.path);
+            if (post == post_routes_.end()) {
+                if (routes_.count(req.path)) {
+                    Response r = error(405, "METHOD_NOT_ALLOWED", "this endpoint only accepts GET");
+                    r.headers["Allow"] = "GET, HEAD";
+                    return r;
+                }
+                return error(404, "NOT_FOUND", "no such endpoint");
+            }
+            // Requiring JSON also makes a cross-site form post fail its CORS
+            // preflight, so a page on another origin cannot drive this endpoint.
+            const auto ct = req.headers.find("content-type");
+            if (ct == req.headers.end() || ct->second.rfind("application/json", 0) != 0)
+                return error(415, "UNSUPPORTED_MEDIA_TYPE", "send the body as application/json");
+            return invoke(post->second, req);
+        }
+
         if (req.method != "GET" && req.method != "HEAD") {
-            return Response::json(R"({"error":{"code":"METHOD_NOT_ALLOWED","message":"only GET is served"}})", 405);
+            Response r = error(405, "METHOD_NOT_ALLOWED", "only GET and POST are served");
+            r.headers["Allow"] = "GET, HEAD, POST";
+            return r;
         }
 
         const auto it = routes_.find(req.path);
-        if (it != routes_.end()) {
-            try {
-                return it->second(req);
-            } catch (const std::exception& e) {
-                return Response::json(
-                    std::string(R"({"error":{"code":"INTERNAL_ERROR","message":")") + e.what() + R"("}})", 500);
-            }
+        if (it != routes_.end()) return invoke(it->second, req);
+
+        if (post_routes_.count(req.path)) {
+            Response r = error(405, "METHOD_NOT_ALLOWED", "this endpoint only accepts POST");
+            r.headers["Allow"] = "POST";
+            return r;
         }
 
         if (!static_root_.empty()) {
@@ -423,7 +500,12 @@ private:
     std::string static_root_;
     bool spa_ = false;
 
+    // 256 x 256 cells is 65,536 characters; this leaves room for the rest of
+    // the body and refuses anything that is plainly not a map.
+    static constexpr size_t kMaxBody = 256 * 1024;
+
     std::map<std::string, Handler> routes_;
+    std::map<std::string, Handler> post_routes_;
     std::vector<std::thread> threads_;
     std::queue<int> queue_;
     std::mutex mutex_;

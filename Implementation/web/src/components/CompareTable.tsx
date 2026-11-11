@@ -22,9 +22,9 @@ export function CompareTable({ data, loading, error, onRun, disabled }: Props) {
 
   return (
     <section className="compare">
-      <h2>The project&apos;s actual research question</h2>
+      <h2>Same route, six OPEN lists</h2>
       <p>
-        A* is held fixed and only the structure holding its OPEN list is swapped. All six must
+        A* is held fixed and only the structure holding its waiting list is swapped. All six must
         return the same route; if they do not, one of them is wrong.
       </p>
       <button type="button" className="secondary" onClick={onRun} disabled={disabled || loading}>
